@@ -229,12 +229,20 @@ var trayIcons = map[string][]byte{
 	"gray":   lollipopPNG(color.RGBA{105, 105, 105, 255}),
 }
 
-// lollipopPNG: icona 32x32, testa nel colore dello stato con vortice bianco (spirale di Archimede)
-// e bastoncino in basso a destra. Supersampling 4x4 per l'antialias.
+// lollipopPNG: icona della traybar, 32x32.
 func lollipopPNG(base color.RGBA) []byte {
-	const n, ss = 32, 4
-	const cx, cy, radius = 13.0, 13.0, 11.5 // testa
-	const spacing, width = 3.8, 1.5         // vortice: distanza tra i giri e spessore
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, lollipopImage(base, 32))
+	return buf.Bytes()
+}
+
+// lollipopImage: icona n x n (disegno su griglia 32): testa nel colore dato con vortice bianco
+// (spirale di Archimede) e bastoncino in basso a destra. Supersampling 4x4 per l'antialias.
+func lollipopImage(base color.RGBA, n int) *image.RGBA {
+	const ss = 4
+	u := float64(n) / 32                 // unita' della griglia 32
+	cx, cy, radius := 13*u, 13*u, 11.5*u // testa
+	spacing, width := 3.8*u, 1.5*u       // vortice: distanza tra i giri e spessore
 	swirl, stick := color.RGBA{255, 255, 255, 255}, color.RGBA{232, 224, 208, 255}
 	b := spacing / (2 * math.Pi)
 	img := image.NewRGBA(image.Rect(0, 0, n, n))
@@ -254,10 +262,10 @@ func lollipopPNG(base color.RGBA) []byte {
 							phi += 2 * math.Pi
 						}
 						k := math.Round((r/b - phi) / (2 * math.Pi)) // giro della spirale piu' vicino
-						if math.Abs(r-b*(phi+2*math.Pi*k)) < width/2 && r < radius-1.2 {
+						if math.Abs(r-b*(phi+2*math.Pi*k)) < width/2 && r < radius-1.2*u {
 							c = &swirl
 						}
-					} else if t := math.Max(0, math.Min(1, (px+py-38)/20)); math.Hypot(px-19-10*t, py-19-10*t) < 1.75 {
+					} else if t := math.Max(0, math.Min(1, (px+py-38*u)/(20*u))); math.Hypot(px-(19+10*t)*u, py-(19+10*t)*u) < 1.75*u {
 						c = &stick // segmento da (19,19) a (29,29)
 					}
 					if c != nil {
@@ -269,7 +277,5 @@ func lollipopPNG(base color.RGBA) []byte {
 			img.SetRGBA(x, y, color.RGBA{uint8(sr / k), uint8(sg / k), uint8(sb / k), uint8(255 * sa / k)})
 		}
 	}
-	var buf bytes.Buffer
-	_ = png.Encode(&buf, img)
-	return buf.Bytes()
+	return img
 }

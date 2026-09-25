@@ -189,6 +189,10 @@ Esci
 - Le icone (5 colori) si generano all'avvio in Go con `image/png` e non ci sono file di asset.
   Su macOS l'icona compare nella barra dei menu, a colori (non come template).
 - `settings.json` contiene anche `alwaysOnTop` e `showWindow`.
+- **Icona dell'exe** (Esplora risorse, collegamenti): lo stesso lollipop in rosso, in `lollipop.ico` (da 16 a 256 px)
+  incorporato come risorsa Windows (`rsrc_windows_amd64.syso`, creato con `go-winres`). Entrambi i file sono nel
+  repo e si rigenerano con `go generate`; `TestAppIcon` segnala se non corrispondono più al disegno. Su macOS
+  non serve nulla, finché il binario non diventa un bundle `.app`.
 
 ### Implementazione
 

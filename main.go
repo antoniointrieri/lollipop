@@ -9,6 +9,10 @@
 // Debug: lollipop -once (su Windows, binario GUI: lollipop.exe -once | more)
 package main
 
+// Icona dell'exe: lollipop.ico (disegnata da ui.go) -> risorsa Windows incorporata da "go build".
+//go:generate go test -run TestAppIcon -update
+//go:generate go run github.com/tc-hib/go-winres@v0.3.3 simply --icon lollipop.ico --manifest none --arch amd64
+
 import (
 	"embed"
 	"encoding/json"

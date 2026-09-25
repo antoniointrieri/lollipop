@@ -14,6 +14,9 @@ Dettagli in `docs/spec.md`.
 
 Test: `go test ./...`
 
+Icona dell'exe: `lollipop.ico` e `rsrc_windows_amd64.syso` sono nel repo e disegnati dal codice di `ui.go`.
+Se cambi il disegno, rigenerali con `go generate` (il test `TestAppIcon` fallisce finché non lo fai).
+
 ## Uso
 
 - Debug: `lollipop -once` stampa agenti e pannello attivo ed esce (su Windows: `lollipop.exe -once | more`).
