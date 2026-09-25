@@ -35,7 +35,7 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test ./...
-      - name: build (universal: arm64 + amd64)
+      - name: "build (universale: arm64 + amd64)"
         run: |
           GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o lollipop-arm64 .
           GOARCH=amd64 CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64" go build -trimpath -ldflags "-s -w" -o lollipop-amd64 .
