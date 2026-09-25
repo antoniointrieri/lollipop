@@ -5,8 +5,9 @@
 <h1 align="center">lollipop</h1>
 
 <p align="center">
-  Un semaforo per gli agenti AI di <b>Orca</b>: una finestrella sempre in primo piano che ti dice,
-  con un'occhiata, quale agente sta lavorando, quale ha finito e quale aspetta te.
+  Un semaforo per i tuoi agenti AI, in <b>Orca</b> e nelle sessioni di <b>Claude Code</b>: una finestrella
+  sempre in primo piano che ti dice, con un'occhiata, quale agente sta lavorando, quale ha finito e quale
+  aspetta te.
 </p>
 
 <p align="center">
@@ -19,21 +20,22 @@ Il nome viene dal *lollipop man* inglese, il vigile con la paletta tonda che dic
 
 ## Cosa fa
 
-- **Una voce per agente** con un terminale aperto in Orca, colorata secondo lo stato:
+- **Una voce per agente**: ogni agente di Orca con un terminale aperto e ogni sessione di Claude Code in
+  esecuzione sulla macchina (console, Windows Terminal, Warp, terminale di VS Code o IntelliJ, ...), colorata
+  secondo lo stato:
 
   | Colore | Stato |
   |---|---|
   | 🟡 giallo | sta lavorando (`working`) |
   | 🟢 verde | ha finito (`done`) |
-  | 🔵 blu | turno finito, ma con shell o monitor ancora attivi in background |
+  | 🔵 blu | turno finito, ma con shell o monitor ancora attivi in background (solo Orca) |
   | 🔴 rosso | aspetta te: input o un permesso (`waiting`, `blocked`) |
 
 - **Lampeggia** quando un agente ha appena finito e non l'hai ancora guardato. Smette quando clicchi la voce,
-  quando apri quel pannello in Orca o quando l'agente riparte. Se stavi già guardando l'agente, non lampeggia.
-- **Clic su una voce**: Orca va in primo piano, direttamente sul terminale di quell'agente.
-- **Anche Claude Code puro**: le sessioni avviate fuori da Orca (Windows Terminal, console, terminale di VS Code
-  o IntelliJ, ...) compaiono nella stessa lista. lollipop trova da solo la finestra che le ospita, e il clic la
-  porta davanti. Vedi [Sessioni Claude Code](#sessioni-claude-code).
+  quando porti davanti l'agente o quando l'agente riparte. Se stavi già guardando l'agente, non lampeggia.
+- **Clic su una voce**: porta davanti l'agente. Per Orca, direttamente sul terminale di quell'agente; per
+  Claude Code, la finestra che ospita la sessione, che lollipop trova da solo. Vedi
+  [Sessioni Claude Code](#sessioni-claude-code).
 - **Icona nella traybar** nel colore dell'agente più urgente, con un riepilogo nel tooltip
   (`lollipop — 1 in attesa, 1 done, 2 working`). Puoi anche nascondere la finestra e tenere solo l'icona.
 - **Si adatta**: cresce verso sinistra tenendo fermo il bordo destro, resta sopra la taskbar, funziona su più
@@ -49,7 +51,9 @@ Il nome viene dal *lollipop man* inglese, il vigile con la paletta tonda che dic
 ## Requisiti
 
 - **Windows 10/11** con WebView2 (già presente su Windows 11 e su Windows 10 aggiornato).
-- **Orca** in esecuzione sulla stessa macchina (provato con Orca 1.4.211).
+- Almeno uno tra:
+  - **Orca** in esecuzione sulla stessa macchina (provato con Orca 1.4.211);
+  - la CLI di **Claude Code** (provata con la 2.1.282), con l'hook di lollipop installato dal menu.
 - **macOS 11+**: sperimentale, vedi [Limitazioni](#limitazioni).
 
 ## Installazione
@@ -88,7 +92,7 @@ a `lollipop.exe` in `shell:startup` (Win+R → `shell:startup`); su macOS aggiun
 
 | Azione | Effetto |
 |---|---|
-| Clic su una voce | apre Orca sul terminale dell'agente |
+| Clic su una voce | porta davanti l'agente (Orca sul suo terminale, oppure la finestra di Claude Code) |
 | Trascina la maniglia `⋮` | sposta la finestra |
 | Tasto destro (sulla finestra o sull'icona) | menu delle impostazioni ed **Esci** |
 | Clic sull'icona nella traybar | mostra la finestra e la porta davanti |
@@ -124,7 +128,7 @@ vede lo stato, ma il clic non fa nulla.
 ### Se qualcosa non va
 
 Il pallino rosso con "Errore" nel tooltip vuol dire che Orca ha risposto in modo inatteso (per esempio dopo
-un aggiornamento di Orca); lollipop riprova da solo ogni mezzo secondo. Orca chiuso non è un errore. Per vedere cosa legge da Orca:
+un aggiornamento di Orca); lollipop riprova da solo ogni mezzo secondo. Orca chiuso non è un errore. Per vedere cosa legge da Orca e da Claude Code:
 
 ```sh
 lollipop.exe -once | more     # Windows
@@ -135,7 +139,7 @@ Il comando stampa agenti, stati e pannello attivo, poi esce.
 
 ## Come funziona
 
-lollipop parla con il runtime locale di Orca attraverso la stessa named pipe che usa la CLI `orca` (socket Unix
+**Orca**: lollipop parla con il runtime locale di Orca attraverso la stessa named pipe che usa la CLI `orca` (socket Unix
 su macOS). L'indirizzo e il token li legge da `%APPDATA%\orca\orca-runtime.json`. Ogni 500 ms chiede a Orca la
 lista dei worktree con i loro agenti e quella dei terminali; al clic chiede di aprire il terminale. Non modifica
 nient'altro in Orca, e il token non viene mai scritto da nessuna parte.
@@ -144,6 +148,10 @@ nient'altro in Orca, e il token non viene mai scritto da nessuna parte.
 > Il protocollo della pipe **non è documentato**: è stato ricostruito osservando Orca. Un aggiornamento di Orca
 > potrebbe romperlo; in quel caso lollipop mostra il pallino rosso con l'errore.
 
+**Claude Code**: l'hook scrive un piccolo file di stato per ogni sessione nella cartella delle impostazioni di
+lollipop, che lollipop legge ogni 500 ms. L'hook registra anche quale finestra ospita la sessione, risalendo dal
+processo di Claude Code; una sessione il cui processo non esiste più viene tolta.
+
 La UI è fatta con [Wails v3](https://github.com/wailsapp/wails): backend Go e una pagina HTML incorporata nel binario.
 
 ## Limitazioni
@@ -151,6 +159,9 @@ La UI è fatta con [Wails v3](https://github.com/wailsapp/wails): backend Go e u
 - **macOS non provato**: `platform_darwin.go` è scritto sulla base del codice di Orca e compila in CI, ma non è
   mai stato eseguito. La cartella dati di Orca (`~/Library/Application Support/orca`) e il trasporto via socket
   sono ipotesi ragionate. Chi ha un Mac può lanciare `./lollipop -once` e raccontare cosa succede.
+- Sessioni Claude Code: il clic porta davanti la finestra giusta, non la scheda o il pannello esatto dell'IDE.
+  Con più finestre dello stesso terminale vince quella con la cartella della sessione nel titolo, altrimenti la
+  prima. Per le sessioni in WSL, SSH o container si vede lo stato, ma il clic non fa nulla.
 - Se in Orca dividi le schede in più gruppi affiancati, il rilevamento del pannello attivo guarda solo il
   gruppo principale.
 - Mostra solo i terminali locali, non quelli degli host remoti.

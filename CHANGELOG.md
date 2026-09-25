@@ -4,6 +4,18 @@ Notable changes to lollipop. The format follows [Keep a Changelog](https://keepa
 the project uses [Semantic Versioning](https://semver.org/). The section of each version is also used as the
 text of its GitHub Release.
 
+## [0.2.1] - 2026-09-25
+
+### Added
+
+- The tooltip of a plain Claude Code session shows the conversation title.
+
+### Fixed
+
+- Clicking a Claude Code session running in Warp (or any terminal using ConPTY without owning its console
+  window) now brings the terminal to the front instead of doing nothing. Existing sessions pick up the fix on
+  their next event.
+
 ## [0.2.0] - 2026-09-25
 
 ### Added
@@ -35,5 +47,6 @@ First release: a Go + Wails v3 port of the PowerShell proof of concept.
   top, show window. Window position and settings are remembered.
 - Windows build and experimental macOS build (universal binary) from GitHub Actions.
 
+[0.2.1]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.2.1
 [0.2.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.1.0

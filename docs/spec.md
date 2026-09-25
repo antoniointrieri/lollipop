@@ -213,8 +213,11 @@ e lo script hook di Orca stessa (`~/.orca/agent-hooks/claude-hook.cmd`).
 ### Comportamento
 
 - **Voci**: sono mescolate a quelle di Orca nella stessa lista, ordinata per nome, con lo stesso stile. Il nome è la
-  cartella della sessione (base di `cwd`). La provenienza compare solo nel tooltip:
-  `[stato] cartella` + `Claude Code in Windows Terminal`.
+  cartella della sessione (base di `cwd`). Il titolo della conversazione e la provenienza compaiono solo nel
+  tooltip: `[stato] cartella` + `Security check con Aikido` + `Claude Code in Windows Terminal`. Il titolo è
+  l'ultimo record `ai-title` negli ultimi 256 KB del transcript (formato interno di Claude Code: se cambia, si
+  perde solo il titolo). Il nome dato a un pannello dentro il terminale, per esempio in Warp, non è leggibile
+  dall'esterno.
 - **Stati** ricavati dagli hook:
 
   | Evento hook | Stato |

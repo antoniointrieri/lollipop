@@ -5,8 +5,9 @@
 <h1 align="center">lollipop</h1>
 
 <p align="center">
-  A traffic light for the AI agents running in <b>Orca</b>: a small always-on-top window that tells you,
-  at a glance, which agent is working, which one is done and which one is waiting for you.
+  A traffic light for your AI coding agents, in <b>Orca</b> and in plain <b>Claude Code</b> sessions: a small
+  always-on-top window that tells you, at a glance, which agent is working, which one is done and which one is
+  waiting for you.
 </p>
 
 <p align="center">
@@ -20,22 +21,21 @@ when it's their turn.
 
 ## Features
 
-- **One entry per agent** with an open terminal in Orca, colored by state:
+- **One entry per agent**: every Orca agent with an open terminal and every Claude Code session running on this
+  machine (console, Windows Terminal, Warp, the VS Code or IntelliJ terminal, ...), colored by state:
 
   | Color | State |
   |---|---|
   | 🟡 yellow | working (`working`) |
   | 🟢 green | done (`done`) |
-  | 🔵 blue | turn finished, but background shells or monitors are still running |
+  | 🔵 blue | turn finished, but background shells or monitors are still running (Orca only) |
   | 🔴 red | waiting for you: input or a permission (`waiting`, `blocked`) |
 
 - **Blinks** when an agent has just finished and you haven't looked at it yet. It stops when you click the entry,
-  open that pane in Orca, or the agent starts working again. If you were already looking at the agent, it doesn't
-  blink.
-- **Click an entry** to bring Orca to the front, right on that agent's terminal.
-- **Plain Claude Code too**: sessions started outside Orca (Windows Terminal, a console, the VS Code or IntelliJ
-  terminal, ...) show up in the same list. lollipop finds the hosting window by itself, and clicking the entry
-  brings that window to the front. See [Claude Code sessions](#claude-code-sessions).
+  bring the agent to the front, or the agent starts working again. If you were already looking at the agent, it
+  doesn't blink.
+- **Click an entry** to bring the agent to the front: Orca right on that agent's terminal, or the window hosting
+  the Claude Code session, which lollipop finds by itself. See [Claude Code sessions](#claude-code-sessions).
 - **Tray icon** in the color of the most urgent agent, with a summary in its tooltip
   (`lollipop — 1 waiting, 1 done, 2 working`). You can hide the window and keep only the icon.
 - **Stays out of the way**: grows to the left keeping its right edge fixed, stays above the taskbar, works across
@@ -53,7 +53,9 @@ when it's their turn.
 ## Requirements
 
 - **Windows 10/11** with WebView2 (preinstalled on Windows 11 and on up-to-date Windows 10).
-- **Orca** running on the same machine (tested with Orca 1.4.211).
+- At least one of:
+  - **Orca** running on the same machine (tested with Orca 1.4.211);
+  - **Claude Code** CLI (tested with 2.1.282), with the lollipop hook installed from the menu.
 - **macOS 11+**: experimental, see [Limitations](#limitations).
 
 ## Install
@@ -92,7 +94,7 @@ add it to *Login Items*.
 
 | Action | Effect |
 |---|---|
-| Click an entry | opens Orca on the agent's terminal |
+| Click an entry | brings the agent to the front (Orca on its terminal, or the Claude Code window) |
 | Drag the `⋮` handle | moves the window |
 | Right-click (window or tray icon) | settings menu and **Quit** |
 | Click the tray icon | shows the window and brings it to the front |
@@ -128,7 +130,7 @@ clicking them does nothing.
 ### Troubleshooting
 
 A red dot with "Error" in the tooltip means Orca answered in an unexpected way (for example after an Orca
-update); lollipop keeps retrying every half second. A closed Orca is not an error. To see what it reads from Orca:
+update); lollipop keeps retrying every half second. A closed Orca is not an error. To see what it reads from Orca and Claude Code:
 
 ```sh
 lollipop.exe -once | more     # Windows
@@ -139,7 +141,7 @@ It prints agents, states and the active pane, then exits.
 
 ## How it works
 
-lollipop talks to Orca's local runtime through the same named pipe the `orca` CLI uses (a Unix socket on macOS),
+**Orca**: lollipop talks to Orca's local runtime through the same named pipe the `orca` CLI uses (a Unix socket on macOS),
 reading the address and token from `orca-runtime.json` in Orca's data folder. Every 500 ms it asks Orca for the
 worktrees with their agents and for the list of terminals; on click it asks Orca to focus the terminal. It
 changes nothing else in Orca, and the token is never written anywhere.
@@ -147,6 +149,10 @@ changes nothing else in Orca, and the token is never written anywhere.
 > [!WARNING]
 > The pipe protocol is **undocumented**: it was worked out by observing Orca. An Orca update could break it; if
 > that happens, lollipop shows the red dot with the error.
+
+**Claude Code**: the hook writes one small state file per session in lollipop's settings folder, and lollipop
+reads that folder every 500 ms. The hook also records which window hosts the session, walking up from the Claude
+Code process; a session whose process is gone is dropped.
 
 The UI is built with [Wails v3](https://github.com/wailsapp/wails): a Go backend and an HTML page embedded in the
 binary.
@@ -156,6 +162,9 @@ binary.
 - **macOS is untested**: `platform_darwin.go` is written from Orca's source and compiles in CI, but it has never
   been run. The Orca data folder (`~/Library/Application Support/orca`) and the socket transport are educated
   guesses. If you have a Mac, run `./lollipop -once` and report what happens.
+- Claude Code sessions: clicking brings the right window to the front, not the exact tab or IDE panel. With
+  several windows of the same terminal, the one with the session folder in its title wins, otherwise the first.
+  Sessions inside WSL, SSH or containers show their state, but clicking them does nothing.
 - If you split Orca tabs into several side-by-side groups, active-pane detection only looks at the main group.
 - Only local terminals are shown, not those of remote hosts.
 - Wails v3 is still in beta: the version is pinned in `go.mod`.

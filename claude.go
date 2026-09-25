@@ -25,6 +25,7 @@ const hookSuffix = " hook || echo {}" // if the exe is gone, "{}" means no effec
 type claudeSession struct {
 	State       string
 	Cwd         string
+	Title       string // conversation title, from the transcript
 	ClaudePID   int
 	ClaudeStart int64 // detects recycled pids
 	Host        hostRef
@@ -82,6 +83,7 @@ func runHook() {
 	var in struct {
 		SessionID        string `json:"session_id"`
 		Cwd              string `json:"cwd"`
+		Transcript       string `json:"transcript_path"`
 		Event            string `json:"hook_event_name"`
 		NotificationType string `json:"notification_type"`
 	}
@@ -104,16 +106,45 @@ func runHook() {
 	if s.At > at {
 		return // a newer event was already written (hooks can overlap)
 	}
-	if s.ClaudePID == 0 || in.Event == "SessionStart" {
-		// ponytail: without CLAUDE_PID (old Claude Code) there is no liveness check; the entry goes only on SessionEnd
-		s.ClaudePID, _ = strconv.Atoi(os.Getenv("CLAUDE_PID"))
-		s.ClaudeStart = processStart(s.ClaudePID)
-		s.Host = findHost(s.ClaudePID)
-	}
+	// Refreshed on every event (the hook runs async, so it costs Claude nothing): picks up resumed sessions and
+	// fixes a wrong host recorded by an older lollipop.
+	// ponytail: without CLAUDE_PID (old Claude Code) there is no liveness check; the entry goes only on SessionEnd
+	s.ClaudePID, _ = strconv.Atoi(os.Getenv("CLAUDE_PID"))
+	s.ClaudeStart = processStart(s.ClaudePID)
+	s.Host = findHost(s.ClaudePID)
 	s.State, s.Cwd, s.At = state, in.Cwd, at
+	if t := transcriptTitle(in.Transcript); t != "" {
+		s.Title = t
+	}
 	s.Host.Folder = filepath.Base(in.Cwd)
 	out, _ := json.Marshal(s)
 	_ = writeAtomic(file, out)
+}
+
+// transcriptTitle returns the latest "ai-title" record near the end of the transcript.
+// ponytail: internal Claude Code format; if it changes, only the title in the tooltip is lost
+func transcriptTitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	const tail = 256 << 10
+	if st, err := f.Stat(); err == nil && st.Size() > tail {
+		f.Seek(st.Size()-tail, io.SeekStart)
+	}
+	data, _ := io.ReadAll(f)
+	lines := bytes.Split(data, []byte("\n"))
+	for i := len(lines) - 1; i >= 0; i-- {
+		if !bytes.Contains(lines[i], []byte(`"ai-title"`)) {
+			continue
+		}
+		var r struct{ Type, AITitle string }
+		if json.Unmarshal(lines[i], &r) == nil && r.Type == "ai-title" && r.AITitle != "" {
+			return r.AITitle
+		}
+	}
+	return ""
 }
 
 func writeAtomic(file string, data []byte) error {
@@ -152,15 +183,18 @@ func loadClaudeSessions() []agent {
 			continue
 		}
 		host := s.Host
-		agents = append(agents, agent{Key: "claude:" + id, State: s.State, Label: filepath.Base(s.Cwd),
-			Title: "Claude Code in " + hostLabel(host.Name), Host: &host})
+		title := "Claude Code in " + hostLabel(host.Name)
+		if s.Title != "" {
+			title = s.Title + "\n" + title
+		}
+		agents = append(agents, agent{Key: "claude:" + id, State: s.State, Label: filepath.Base(s.Cwd), Title: title, Host: &host})
 	}
 	return agents
 }
 
 func hostLabel(exe string) string {
 	names := map[string]string{"WindowsTerminal": "Windows Terminal", "Code": "VS Code", "idea64": "IntelliJ IDEA",
-		"powershell": "PowerShell", "pwsh": "PowerShell", "cmd": tr("Command Prompt", "Prompt dei comandi"), "conhost": "console"}
+		"powershell": "PowerShell", "pwsh": "PowerShell", "cmd": tr("Command Prompt", "Prompt dei comandi"), "conhost": "console", "warp": "Warp"}
 	if n, ok := names[exe]; ok {
 		return n
 	}

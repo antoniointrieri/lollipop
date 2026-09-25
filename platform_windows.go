@@ -19,6 +19,7 @@ var (
 	procIsIconic      = user32.NewProc("IsIconic")
 	procGetWindow     = user32.NewProc("GetWindow")
 	procGetAncestor   = user32.NewProc("GetAncestor")
+	procGetClassName  = user32.NewProc("GetClassNameW")
 	kernel32          = syscall.NewLazyDLL("kernel32.dll")
 	procAttachConsole = kernel32.NewProc("AttachConsole")
 	procFreeConsole   = kernel32.NewProc("FreeConsole")
@@ -171,16 +172,24 @@ func consoleWindow(pid int) w32.HWND {
 	h, _, _ := procGetConsoleWnd.Call()
 	procFreeConsole.Call()
 	w := w32.HWND(h)
-	switch {
-	case w == 0:
+	if w == 0 {
 		return 0
-	case w32.IsWindowVisible(w):
+	}
+	// A ConPTY console (Windows Terminal, Warp, IDEs) is a 0x0 PseudoConsoleWindow that still reports as
+	// visible: only its owner, when the terminal sets one, is a real window.
+	if w32.IsWindowVisible(w) && className(w) != "PseudoConsoleWindow" {
 		return w
 	}
 	if owner, _, _ := procGetAncestor.Call(h, gaRootOwner); owner != 0 && owner != h && w32.IsWindowVisible(w32.HWND(owner)) {
 		return w32.HWND(owner)
 	}
 	return 0
+}
+
+func className(w w32.HWND) string {
+	var buf [256]uint16
+	n, _, _ := procGetClassName.Call(uintptr(w), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	return windows.UTF16ToString(buf[:n])
 }
 
 // The taskbar is topmost too and wins when clicked: re-assert topmost without stealing focus.

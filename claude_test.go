@@ -89,3 +89,17 @@ func compact(s string) []byte {
 	_ = json.Compact(&b, []byte(s))
 	return b.Bytes()
 }
+
+func TestTranscriptTitle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	_ = os.WriteFile(path, []byte(`{"type":"ai-title","aiTitle":"Old"}
+{"type":"user","message":"mentions \"ai-title\" in text"}
+{"type":"ai-title","aiTitle":"New"}
+{"type":"assistant"`), 0o644)
+	if got := transcriptTitle(path); got != "New" {
+		t.Errorf("title = %q", got)
+	}
+	if transcriptTitle(filepath.Join(t.TempDir(), "missing.jsonl")) != "" {
+		t.Error("missing transcript must give no title")
+	}
+}
