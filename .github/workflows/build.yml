@@ -1,0 +1,62 @@
+name: build
+
+# Ogni push/PR: test e build per Windows e macOS (artifact scaricabili dalla pagina della run).
+# Tag v*: in piu' crea una GitHub Release con i binari allegati.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: go build -trimpath -ldflags "-H=windowsgui -s -w" -o lollipop.exe .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lollipop-windows
+          path: lollipop.exe
+
+  macos:
+    runs-on: macos-latest
+    env:
+      CGO_ENABLED: "1"
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - name: build (universal: arm64 + amd64)
+        run: |
+          GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o lollipop-arm64 .
+          GOARCH=amd64 CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64" go build -trimpath -ldflags "-s -w" -o lollipop-amd64 .
+          lipo -create -output lollipop lollipop-arm64 lollipop-amd64
+          lipo -info lollipop
+          tar -czf lollipop-macos.tar.gz lollipop   # tar: lo zip degli artifact perde il bit di esecuzione
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lollipop-macos
+          path: lollipop-macos.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" lollipop.exe lollipop-macos.tar.gz --repo "$GITHUB_REPOSITORY" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
