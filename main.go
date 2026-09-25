@@ -3,7 +3,8 @@
 package main
 
 //go:generate go test -run TestAppIcon -update
-//go:generate go run github.com/tc-hib/go-winres@v0.3.3 simply --icon lollipop.ico --manifest none --arch amd64
+// Exe icon, manifest (same DPI awareness Wails sets at runtime) and version info. CI regenerates it on every build, so a release gets its tag.
+//go:generate go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --icon lollipop.ico --manifest gui --product-name lollipop --file-description "lollipop: traffic light for AI coding agents" --original-filename lollipop.exe --copyright "Copyright (c) 2026 lollipop contributors" --product-version=git-tag --file-version=git-tag
 
 import (
 	"embed"

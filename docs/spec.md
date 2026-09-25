@@ -191,7 +191,10 @@ Esci
 - `settings.json` contiene anche `alwaysOnTop` e `showWindow`.
 - **Icona dell'exe** (Esplora risorse, collegamenti): lo stesso lollipop in rosso, in `lollipop.ico` (da 16 a 256 px)
   incorporato come risorsa Windows (`rsrc_windows_amd64.syso`, creato con `go-winres`). Entrambi i file sono nel
-  repo e si rigenerano con `go generate`. Su macOS
+  repo e si rigenerano con `go generate`. Il `.syso` contiene anche il manifest (DPI awareness per-monitor v2, la
+  stessa che Wails imposterebbe a runtime; Common Controls v6) e le informazioni di versione (nome, descrizione,
+  versione dal tag git), che la CI rigenera a ogni build: un exe senza metadati alza il punteggio degli
+  antivirus euristici. Su macOS
   non serve nulla, finché il binario non diventa un bundle `.app`.
 
 ### Implementazione

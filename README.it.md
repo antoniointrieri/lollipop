@@ -74,6 +74,15 @@ un qualsiasi commit dalla pagina [Actions](https://github.com/antoniointrieri/lo
   ./lollipop
   ```
 
+Alcuni antivirus, Microsoft Defender compreso, possono segnalare `lollipop.exe` (non firmato) con una rilevazione
+generica basata su machine learning (per esempio `Trojan:Win32/Wacatac.B!ml`). Per controllare che un binario
+delle Release sia stato compilato dalla CI di questo repository a partire dal commit del tag, verificane
+l'attestazione di provenienza con la [GitHub CLI](https://cli.github.com/):
+
+```sh
+gh attestation verify lollipop.exe --repo antoniointrieri/lollipop
+```
+
 ### Compilare dai sorgenti
 
 Serve **Go 1.26** o successivo; non servono né Node né npm.
@@ -184,9 +193,10 @@ docs/spec.md          specifica: comportamento e decisioni
 - Le novità significative vanno in [CHANGELOG.md](CHANGELOG.md), in inglese: la sezione di una versione diventa il testo
   della sua Release.
 - La CI (`.github/workflows/build.yml`) testa e compila Windows e macOS a ogni push; un tag `v*` pubblica anche
-  una GitHub Release con i due binari.
+  una GitHub Release con i due binari e la loro attestazione di provenienza.
 - L'icona dell'exe (`lollipop.ico`, `rsrc_windows_amd64.syso`) è disegnata dal codice in `ui.go`. Se cambi il
-  disegno, rigenerala con `go generate`.
+  disegno, rigenerala con `go generate`. Lo stesso `.syso` contiene il manifest e le informazioni di versione, che
+  la CI rigenera dal tag git a ogni build.
 
 ## Licenza
 

@@ -18,7 +18,10 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test ./...
-      - run: go build -trimpath -ldflags "-H=windowsgui -s -w" -o lollipop.exe .
+      # Risorse dell'exe con la versione dal tag (git describe; senza tag: 0.0.0.0).
+      - run: go generate -run go-winres
+      # Niente -s -w: i binari Go strippati e non firmati prendono piu' falsi positivi dagli antivirus euristici.
+      - run: go build -trimpath -ldflags "-H=windowsgui" -o lollipop.exe .
       - uses: actions/upload-artifact@v7
         with:
           name: lollipop-windows
@@ -53,6 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write      # attestazione: firma Sigstore con l'identita' OIDC del workflow
+      attestations: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -65,3 +70,10 @@ jobs:
           gh release create "$GITHUB_REF_NAME" lollipop.exe lollipop-macos.tar.gz --repo "$GITHUB_REPOSITORY" "${notes[@]}"
         env:
           GH_TOKEN: ${{ github.token }}
+      # Provenienza dei binari (verificabile con "gh attestation verify"). Dopo la release: se fallisce, la
+      # release e' gia' pubblicata.
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            lollipop.exe
+            lollipop-macos.tar.gz

@@ -4,6 +4,16 @@ Notable changes to lollipop. The format follows [Keep a Changelog](https://keepa
 the project uses [Semantic Versioning](https://semver.org/). The section of each version is also used as the
 text of its GitHub Release.
 
+## [Unreleased]
+
+### Changed
+
+- The Windows executable carries version information (name, description, version) and an application manifest,
+  and is no longer stripped of debug symbols. Both changes aim at fewer false positives from heuristic antivirus
+  detections such as `Trojan:Win32/Wacatac.B!ml`.
+- Release binaries come with a build provenance attestation: `gh attestation verify lollipop.exe --repo
+  antoniointrieri/lollipop` checks that they were built by this repository's CI.
+
 ## [0.2.1] - 2026-09-25
 
 ### Added
@@ -47,6 +57,7 @@ First release: a Go + Wails v3 port of the PowerShell proof of concept.
   top, show window. Window position and settings are remembered.
 - Windows build and experimental macOS build (universal binary) from GitHub Actions.
 
+[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.2.1...HEAD
 [0.2.1]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.2.1
 [0.2.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.1.0
