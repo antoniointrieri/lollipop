@@ -1,9 +1,9 @@
 package main
 
-// Client del runtime locale di Orca (protocollo non documentato, vedi docs/brief.md):
-// una riga JSON {id, authToken, method, params} per richiesta, una riga di risposta.
-// Connessione tenuta aperta; se cade (es. Orca riavviato: cambia endpoint) si riconnette alla richiesta dopo.
-// ponytail: protocollo non documentato; se cambia, tornare a "orca worktree ps --json" / "orca terminal list --json"
+// Client for Orca's local runtime. The protocol is undocumented (see docs/brief.md): one JSON line per request
+// {id, authToken, method, params}, one JSON line per response. The methods mirror the documented CLI commands
+// "orca worktree ps --json" and "orca terminal list --json".
+// ponytail: undocumented transport; if it breaks, fall back to running the orca CLI (~1 s per call)
 
 import (
 	"bufio"
@@ -19,23 +19,25 @@ import (
 
 const requestTimeout = 2 * time.Second
 
+var errOrcaAbsent = errors.New("Orca is not running")
+
 type orcaClient struct {
 	mu    sync.Mutex
 	conn  net.Conn
 	r     *bufio.Reader
-	token string // segreto: mai loggato, stampato o messo in un errore
+	token string // from orca-runtime.json: never log it or put it in an error
 	pid   int
 }
 
 func orcaDir() string {
-	d, _ := os.UserConfigDir() // %APPDATA% su Windows, ~/Library/Application Support su macOS
+	d, _ := os.UserConfigDir()
 	return filepath.Join(d, "orca")
 }
 
 func (c *orcaClient) connect() error {
 	raw, err := os.ReadFile(filepath.Join(orcaDir(), "orca-runtime.json"))
 	if err != nil {
-		return fmt.Errorf("Orca non avviato? %w", err)
+		return errOrcaAbsent
 	}
 	var rt struct {
 		PID        int
@@ -43,7 +45,7 @@ func (c *orcaClient) connect() error {
 		Transports []struct{ Kind, Endpoint string }
 	}
 	if err := json.Unmarshal(raw, &rt); err != nil {
-		return errors.New("orca-runtime.json illeggibile")
+		return errors.New(tr("unreadable orca-runtime.json", "orca-runtime.json illeggibile"))
 	}
 	for _, t := range rt.Transports {
 		if t.Kind != "named-pipe" && t.Kind != "unix" {
@@ -51,14 +53,15 @@ func (c *orcaClient) connect() error {
 		}
 		conn, err := dial(t.Kind, t.Endpoint)
 		if err != nil {
-			return fmt.Errorf("connessione a Orca: %w", err)
+			return errOrcaAbsent // stale runtime file: Orca was closed
 		}
 		c.conn, c.r, c.token, c.pid = conn, bufio.NewReader(conn), rt.AuthToken, rt.PID
 		return nil
 	}
-	return errors.New("orca-runtime.json: nessun trasporto locale")
+	return errors.New(tr("orca-runtime.json: no local transport", "orca-runtime.json: nessun trasporto locale"))
 }
 
+// call reconnects lazily: the endpoint changes every time Orca restarts.
 func (c *orcaClient) call(method string, params, result any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -78,7 +81,7 @@ func (c *orcaClient) call(method string, params, result any) error {
 	if err == nil {
 		_, err = c.conn.Write(append(req, '\n'))
 	}
-	for err == nil && resp.ID != "lollipop" { // salta eventuali righe non nostre
+	for err == nil && resp.ID != "lollipop" { // skip lines that aren't a reply to us
 		var line []byte
 		if line, err = c.r.ReadBytes('\n'); err == nil {
 			resp.ID = ""
@@ -88,7 +91,7 @@ func (c *orcaClient) call(method string, params, result any) error {
 	if err != nil {
 		c.conn.Close()
 		c.conn = nil
-		return fmt.Errorf("connessione a Orca persa: %w", err)
+		return fmt.Errorf(tr("lost connection to Orca: %w", "connessione a Orca persa: %w"), err)
 	}
 	if !resp.OK {
 		return fmt.Errorf("%s: %s", method, resp.Error.Message)
@@ -107,7 +110,6 @@ func (c *orcaClient) focusTerminal(handle string) error {
 	return c.call("terminal.focus", map[string]string{"terminal": handle}, &ignored)
 }
 
-// poll: agenti con un terminale vivo + pannello in primo piano dentro Orca.
 func (c *orcaClient) poll() (snapshot, error) {
 	var wt worktreePS
 	var tl terminalList
@@ -117,8 +119,8 @@ func (c *orcaClient) poll() (snapshot, error) {
 	if err := c.call("terminal.list", map[string]bool{"includeVisualLayouts": true}, &tl); err != nil {
 		return snapshot{}, err
 	}
-	// worktree.ps non espone workingMode: Orca lo scrive qui ("monitoring" = turno finito ma shell/monitor in background).
-	// ponytail: file interno di Orca, se cambia formato si perde solo il blu (resta giallo)
+	// worktree.ps doesn't expose workingMode; Orca writes it here ("monitoring" = turn done, background shells alive).
+	// ponytail: internal Orca file; if its format changes only the blue state is lost
 	var hooks lastStatus
 	if raw, err := os.ReadFile(filepath.Join(orcaDir(), "agent-hooks", "last-status.json")); err == nil {
 		_ = json.Unmarshal(raw, &hooks)

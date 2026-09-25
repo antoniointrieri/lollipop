@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>lollipop</title>
 <style>
-  /* tutto in rem: la dimensione (impostazione "Dimensione") scala solo il font-size della radice */
+  /* sizes in rem: the Size setting only scales the root font-size */
   html { font-size: calc(11pt * var(--scale, 1)); }
   html, body { margin: 0; background: #202024; overflow: hidden; user-select: none; cursor: default; }
   body { font: bold 1rem "Segoe UI", -apple-system, sans-serif; --custom-contextmenu: main; }
@@ -14,7 +14,7 @@
   .a { display: flex; gap: 0.2rem; padding: 0.1rem 0.45rem; border-radius: 3px; background: #3a3a42; cursor: pointer; }
   .pill .a { border-radius: 999px; }
   .compact .name { display: none; }
-  /* compatta: voce quadrata (cerchio con Capsula) e pallino disegnato in CSS, cosi' e' centrato esattamente */
+  /* compact: square entry (circle when pill) with a CSS-drawn dot, which centers exactly unlike the glyph */
   .compact .a { width: 1.5rem; height: 1.5rem; padding: 0; justify-content: center; align-items: center; }
   .compact .dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: currentColor; font-size: 0; }
   .a.pressed { background: #5a5a6a; }
@@ -27,10 +27,11 @@
 import * as wails from "/wails/runtime.js";
 
 const colors = { working: [255, 215, 0], done: [50, 205, 50], monitoring: [0, 191, 255] };
-// lampeggio tra il colore dello stato e una sua versione al 40% (verde chiaro <-> verde scuro, ecc.)
+// blinking alternates the state color with a 40% version of it
 const rgb = (state, dim) => `rgb(${(colors[state] || [255, 0, 0]).map(v => Math.round(v * (dim ? 0.4 : 1)))})`;
 const list = document.getElementById("list"), bar = document.getElementById("bar");
-let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer;
+let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer, lang = "en";
+const text = (en, it) => lang === "it" ? it : en;
 
 function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
 
@@ -41,7 +42,7 @@ function render(msg) {
   if (!items.length) {
     const d = span("empty", "●");
     d.style.color = error ? "rgb(255,0,0)" : "dimgray";
-    d.title = error ? "Errore: " + error : "Nessun agente attivo";
+    d.title = error ? text("Error: ", "Errore: ") + error : text("No active agents", "Nessun agente attivo");
     list.append(d);
   }
   for (const it of items) {
@@ -58,7 +59,7 @@ function render(msg) {
   wails.Events.Emit("size", { w: Math.ceil(r.width), h: Math.ceil(r.height) });
 }
 
-// Clic: evidenzia subito la voce per 500 ms e apre l'agente; nel frattempo i clic ripetuti sono ignorati.
+// Highlight for 500 ms; repeated clicks in that window are ignored.
 function click(it, a) {
   if (pressedKey) return;
   pressedKey = it.key;
@@ -68,8 +69,8 @@ function click(it, a) {
   wails.Events.Emit("focus", { key: it.key, handle: it.handle });
 }
 
-// Impostazioni di aspetto (dal menu): forma, dimensione, compatta, periodo del lampeggio.
 function applySettings(s) {
+  lang = s.uiLang;
   document.body.classList.toggle("pill", s.shape === "pill");
   document.body.classList.toggle("compact", s.compact);
   document.documentElement.style.setProperty("--scale", s.scale / 100);
@@ -78,7 +79,7 @@ function applySettings(s) {
     phase = !phase;
     for (const { it, dot } of dots) dot.style.color = rgb(it.state, phase && it.blink);
   }, s.blinkMs);
-  render(last); // ridisegna e comunica la nuova dimensione
+  render(last); // re-render to report the new size
 }
 
 wails.Events.On("agents", e => render(e.data));

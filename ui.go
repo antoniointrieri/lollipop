@@ -1,7 +1,5 @@
 package main
 
-// Impostazioni (menu della finestra e dell'icona nella traybar), posizione della finestra, icona nella traybar.
-
 import (
 	"bytes"
 	"encoding/json"
@@ -11,7 +9,9 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -19,13 +19,15 @@ import (
 type position struct{ Right, Top int }
 
 type settings struct {
-	Pos         *position `json:"pos,omitempty"` // bordo destro e superiore della finestra
-	Shape       string    `json:"shape"`         // "rect" | "pill"
-	BlinkMs     int       `json:"blinkMs"`       // 1000 | 500 | 250
-	Scale       int       `json:"scale"`         // percentuale: 85 | 100 | 125
-	Compact     bool      `json:"compact"`       // solo pallini, nome nel tooltip
-	AlwaysOnTop bool      `json:"alwaysOnTop"`
-	ShowWindow  bool      `json:"showWindow"`
+	Lang           string    `json:"lang"`          // "auto" | "en" | "it"
+	Pos            *position `json:"pos,omitempty"` // right and top edge: the window grows to the left
+	Shape          string    `json:"shape"`         // "rect" | "pill"
+	BlinkMs        int       `json:"blinkMs"`
+	Scale          int       `json:"scale"` // percent
+	Compact        bool      `json:"compact"`
+	AlwaysOnTop    bool      `json:"alwaysOnTop"`
+	ShowWindow     bool      `json:"showWindow"`
+	ClaudePrompted bool      `json:"claudePrompted"` // first-run question about the Claude Code hook already asked
 }
 
 func settingsFile() string {
@@ -34,9 +36,9 @@ func settingsFile() string {
 }
 
 func loadSettings() settings {
-	s := settings{Shape: "rect", BlinkMs: 500, Scale: 100, AlwaysOnTop: true, ShowWindow: true}
+	s := settings{Lang: "auto", Shape: "rect", BlinkMs: 500, Scale: 100, AlwaysOnTop: true, ShowWindow: true}
 	if raw, err := os.ReadFile(settingsFile()); err == nil {
-		_ = json.Unmarshal(raw, &s) // i campi assenti tengono il predefinito
+		_ = json.Unmarshal(raw, &s)
 	}
 	return s
 }
@@ -51,13 +53,33 @@ type ui struct {
 	placed   bool
 	trayLast string
 
-	checks []check // voci spuntabili di tutti i menu, riallineate a ogni cambio
-	menus  []*application.Menu
+	checks      []check // checkable items of every menu, re-synced on each change
+	menus       []*application.Menu
+	claudeItems []claudeItems
 }
 
 type check struct {
 	item *application.MenuItem
 	on   func(settings) bool
+}
+
+type claudeItems struct{ status, install, remove *application.MenuItem }
+
+var uiLang atomic.Value // "en" | "it"
+
+// tr returns the text in the active UI language.
+func tr(en, it string) string {
+	if uiLang.Load() == "it" {
+		return it
+	}
+	return en
+}
+
+func resolveLang(setting string) string {
+	if setting == "en" || setting == "it" {
+		return setting
+	}
+	return osLanguage()
 }
 
 func (u *ui) get() settings {
@@ -78,31 +100,62 @@ func toggle(u *ui, m *application.Menu, label string, field func(*settings) *boo
 	u.checks = append(u.checks, check{item, on})
 }
 
-// buildMenu: stesso menu per la finestra e per l'icona (oggetti distinti: niente handle nativi condivisi).
+// buildMenus (re)creates the window and tray menus, e.g. after a language change.
+// They are separate objects: no shared native handles.
+func (u *ui) buildMenus() {
+	u.checks, u.menus, u.claudeItems = nil, nil, nil
+	ctx := u.app.ContextMenu.New()
+	u.buildMenu(ctx.Menu)
+	u.app.ContextMenu.Add("main", ctx)
+	u.tray.SetMenu(u.buildMenu(application.NewMenu()))
+	u.refreshClaudeStatus()
+}
+
 func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 	shape := func(s *settings) *string { return &s.Shape }
-	sub := m.AddSubmenu("Forma")
-	radio(u, sub, "Rettangolo", shape, "rect")
-	radio(u, sub, "Capsula", shape, "pill")
+	sub := m.AddSubmenu(tr("Shape", "Forma"))
+	radio(u, sub, tr("Rectangle", "Rettangolo"), shape, "rect")
+	radio(u, sub, tr("Pill", "Capsula"), shape, "pill")
 
 	blink := func(s *settings) *int { return &s.BlinkMs }
-	sub = m.AddSubmenu("Lampeggio")
-	radio(u, sub, "Lento (1 s)", blink, 1000)
-	radio(u, sub, "Normale (500 ms)", blink, 500)
-	radio(u, sub, "Veloce (250 ms)", blink, 250)
+	sub = m.AddSubmenu(tr("Blinking", "Lampeggio"))
+	radio(u, sub, tr("Slow (1 s)", "Lento (1 s)"), blink, 1000)
+	radio(u, sub, tr("Normal (500 ms)", "Normale (500 ms)"), blink, 500)
+	radio(u, sub, tr("Fast (250 ms)", "Veloce (250 ms)"), blink, 250)
 
 	scale := func(s *settings) *int { return &s.Scale }
-	sub = m.AddSubmenu("Dimensione")
-	radio(u, sub, "Piccola (85%)", scale, 85)
-	radio(u, sub, "Normale", scale, 100)
-	radio(u, sub, "Grande (125%)", scale, 125)
+	sub = m.AddSubmenu(tr("Size", "Dimensione"))
+	radio(u, sub, tr("Small (85%)", "Piccola (85%)"), scale, 85)
+	radio(u, sub, tr("Normal", "Normale"), scale, 100)
+	radio(u, sub, tr("Large (125%)", "Grande (125%)"), scale, 125)
 
-	toggle(u, m, "Compatta", func(s *settings) *bool { return &s.Compact })
+	toggle(u, m, tr("Compact", "Compatta"), func(s *settings) *bool { return &s.Compact })
 	m.AddSeparator()
-	toggle(u, m, "Sempre in primo piano", func(s *settings) *bool { return &s.AlwaysOnTop })
-	toggle(u, m, "Mostra finestra", func(s *settings) *bool { return &s.ShowWindow })
+	toggle(u, m, tr("Always on top", "Sempre in primo piano"), func(s *settings) *bool { return &s.AlwaysOnTop })
+	toggle(u, m, tr("Show window", "Mostra finestra"), func(s *settings) *bool { return &s.ShowWindow })
 	m.AddSeparator()
-	m.Add("Esci").OnClick(func(*application.Context) {
+	sub = m.AddSubmenu("Claude Code")
+	ci := claudeItems{status: sub.Add("").SetEnabled(false)}
+	ci.install = sub.Add("").OnClick(func(*application.Context) {
+		if claudeHooksStatus() == hooksAbsent {
+			u.claudeAction(installClaudeHooks, tr(
+				"Claude Code integration installed. Sessions that were already open may need a restart to show up.",
+				"Integrazione con Claude Code installata. Le sessioni già aperte potrebbero dover essere riavviate per comparire."))
+		} else {
+			u.claudeAction(installClaudeHooks, tr("Claude Code integration repaired.", "Integrazione con Claude Code riparata."))
+		}
+	})
+	ci.remove = sub.Add(tr("Remove integration", "Rimuovi integrazione")).OnClick(func(*application.Context) {
+		u.claudeAction(removeClaudeHooks, tr("Claude Code integration removed.", "Integrazione con Claude Code rimossa."))
+	})
+	u.claudeItems = append(u.claudeItems, ci)
+	lang := func(s *settings) *string { return &s.Lang }
+	sub = m.AddSubmenu("Language / Lingua") // bilingual: findable whatever the current language
+	radio(u, sub, tr("Automatic", "Automatica"), lang, "auto")
+	radio(u, sub, "English", lang, "en")
+	radio(u, sub, "Italiano", lang, "it")
+	m.AddSeparator()
+	m.Add(tr("Quit", "Esci")).OnClick(func(*application.Context) {
 		u.save()
 		u.app.Quit()
 	})
@@ -115,17 +168,22 @@ func (u *ui) change(set func(*settings)) {
 	set(&u.s)
 	s, placed := u.s, u.placed
 	u.mu.Unlock()
-	for _, c := range u.checks {
-		c.item.SetChecked(c.on(s))
-	}
-	for _, m := range u.menus {
-		m.Update()
+	if l := resolveLang(s.Lang); l != uiLang.Load() {
+		uiLang.Store(l)
+		u.buildMenus()
+	} else {
+		for _, c := range u.checks {
+			c.item.SetChecked(c.on(s))
+		}
+		for _, m := range u.menus {
+			m.Update()
+		}
 	}
 	u.apply(s, placed)
 	u.save()
 }
 
-// apply: impostazioni che riguardano la finestra; quelle di aspetto le applica il frontend.
+// apply handles window-level settings; the frontend applies the visual ones.
 func (u *ui) apply(s settings, placed bool) {
 	u.win.SetAlwaysOnTop(s.AlwaysOnTop)
 	if placed {
@@ -135,10 +193,18 @@ func (u *ui) apply(s settings, placed bool) {
 			u.win.Hide()
 		}
 	}
-	u.app.Event.Emit("settings", s)
+	u.emitSettings(s)
 }
 
-// Mai chiamare metodi della finestra tenendo u.mu: aspettano il thread UI, che puo' essere in attesa di u.mu.
+// emitSettings sends the settings to the frontend together with the resolved UI language.
+func (u *ui) emitSettings(s settings) {
+	u.app.Event.Emit("settings", struct {
+		settings
+		UILang string `json:"uiLang"`
+	}{s, uiLang.Load().(string)})
+}
+
+// Never call window methods while holding u.mu: they wait for the UI thread, which may be waiting for u.mu.
 func (u *ui) save() {
 	var pos *position
 	if u.isPlaced() {
@@ -156,9 +222,8 @@ func (u *ui) save() {
 	}
 }
 
-// place ridimensiona la finestra al contenuto tenendo fermo il bordo destro, clampato allo schermo su cui si trova.
-// Al primo posizionamento parte dalla posizione salvata (o in alto a destra sullo schermo principale).
-// Chiamata solo dall'evento "size" (serializzato dal chiamante).
+// place resizes the window to its content keeping the right edge fixed, clamped to its screen.
+// The first time it restores the saved position (or top right of the primary screen). Callers serialize it.
 func (u *ui) place(w, h int) {
 	s, first := u.get(), !u.isPlaced()
 	b := u.win.Bounds()
@@ -198,17 +263,21 @@ func (u *ui) isPlaced() bool {
 
 func (u *ui) setupTray() {
 	u.tray = u.app.SystemTray.New()
-	u.tray.SetIcon(trayIcons["gray"]).SetMenu(u.buildMenu(application.NewMenu()))
+	trayIcons = map[string][]byte{}
+	for name, c := range map[string]color.RGBA{"red": {255, 0, 0, 255}, "green": {50, 205, 50, 255},
+		"blue": {0, 191, 255, 255}, "yellow": {255, 215, 0, 255}, "gray": {105, 105, 105, 255}} {
+		trayIcons[name] = lollipopPNG(c)
+	}
+	u.tray.SetIcon(trayIcons["gray"])
 	u.tray.SetTooltip("lollipop")
-	u.tray.OnClick(func() { // gira sul thread UI: il lavoro va in una goroutine
-		go func() { // mostra la finestra e la porta davanti
+	u.tray.OnClick(func() {
+		go func() { // the handler runs on the UI thread
 			u.change(func(s *settings) { s.ShowWindow = true })
 			u.win.Focus()
 		}()
 	})
 }
 
-// updateTray: colore dell'agente piu' urgente e riepilogo nel tooltip, solo se cambiano.
 func (u *ui) updateTray(items []item, errMsg string) {
 	c, tip := summary(items, errMsg)
 	u.mu.Lock()
@@ -221,28 +290,21 @@ func (u *ui) updateTray(items []item, errMsg string) {
 	}
 }
 
-var trayIcons = map[string][]byte{
-	"red":    lollipopPNG(color.RGBA{255, 0, 0, 255}),
-	"green":  lollipopPNG(color.RGBA{50, 205, 50, 255}),
-	"blue":   lollipopPNG(color.RGBA{0, 191, 255, 255}),
-	"yellow": lollipopPNG(color.RGBA{255, 215, 0, 255}),
-	"gray":   lollipopPNG(color.RGBA{105, 105, 105, 255}),
-}
+var trayIcons map[string][]byte // built in setupTray, not at init: "lollipop hook" must start fast
 
-// lollipopPNG: icona della traybar, 32x32.
 func lollipopPNG(base color.RGBA) []byte {
 	var buf bytes.Buffer
 	_ = png.Encode(&buf, lollipopImage(base, 32))
 	return buf.Bytes()
 }
 
-// lollipopImage: icona n x n (disegno su griglia 32): testa nel colore dato con vortice bianco
-// (spirale di Archimede) e bastoncino in basso a destra. Supersampling 4x4 per l'antialias.
+// lollipopImage draws on a 32-unit grid scaled to n: head with a white Archimedean spiral, stick at the
+// bottom right. 4x4 supersampling for antialiasing.
 func lollipopImage(base color.RGBA, n int) *image.RGBA {
 	const ss = 4
-	u := float64(n) / 32                 // unita' della griglia 32
-	cx, cy, radius := 13*u, 13*u, 11.5*u // testa
-	spacing, width := 3.8*u, 1.5*u       // vortice: distanza tra i giri e spessore
+	u := float64(n) / 32
+	cx, cy, radius := 13*u, 13*u, 11.5*u
+	spacing, width := 3.8*u, 1.5*u // spiral: distance between turns, stroke width
 	swirl, stick := color.RGBA{255, 255, 255, 255}, color.RGBA{232, 224, 208, 255}
 	b := spacing / (2 * math.Pi)
 	img := image.NewRGBA(image.Rect(0, 0, n, n))
@@ -261,21 +323,93 @@ func lollipopImage(base color.RGBA, n int) *image.RGBA {
 						if phi < 0 {
 							phi += 2 * math.Pi
 						}
-						k := math.Round((r/b - phi) / (2 * math.Pi)) // giro della spirale piu' vicino
+						k := math.Round((r/b - phi) / (2 * math.Pi)) // nearest spiral turn
 						if math.Abs(r-b*(phi+2*math.Pi*k)) < width/2 && r < radius-1.2*u {
 							c = &swirl
 						}
 					} else if t := math.Max(0, math.Min(1, (px+py-38*u)/(20*u))); math.Hypot(px-(19+10*t)*u, py-(19+10*t)*u) < 1.75*u {
-						c = &stick // segmento da (19,19) a (29,29)
+						c = &stick // segment (19,19)-(29,29)
 					}
 					if c != nil {
 						sr, sg, sb, sa = sr+float64(c.R), sg+float64(c.G), sb+float64(c.B), sa+1
 					}
 				}
 			}
-			const k = ss * ss // colori premoltiplicati: media semplice dei campioni
+			const k = ss * ss // premultiplied colors: plain average of the samples
 			img.SetRGBA(x, y, color.RGBA{uint8(sr / k), uint8(sg / k), uint8(sb / k), uint8(255 * sa / k)})
 		}
 	}
 	return img
+}
+
+func (st hooksStatus) label() string {
+	switch st {
+	case hooksOK:
+		return tr("active", "attiva")
+	case hooksBroken:
+		return tr("needs repair", "da riparare")
+	case hooksInvalid:
+		return tr("invalid settings.json", "settings.json non valido")
+	}
+	return tr("not installed", "non installata")
+}
+
+// refreshClaudeStatus updates the status line and greys out the actions that don't apply.
+func (u *ui) refreshClaudeStatus() {
+	st := claudeHooksStatus()
+	for _, ci := range u.claudeItems {
+		ci.status.SetLabel(tr("Integration: ", "Integrazione: ") + st.label())
+		if st == hooksAbsent {
+			ci.install.SetLabel(tr("Install", "Installa"))
+		} else {
+			ci.install.SetLabel(tr("Repair", "Ripara"))
+		}
+		ci.install.SetEnabled(st != hooksInvalid)
+		ci.remove.SetEnabled(st == hooksOK || st == hooksBroken)
+	}
+	for _, m := range u.menus {
+		m.Update()
+	}
+}
+
+func (u *ui) claudeAction(fn func() error, done string) {
+	if err := fn(); err != nil {
+		u.app.Dialog.Error().SetTitle("lollipop").SetMessage(err.Error()).Show()
+	} else {
+		u.app.Dialog.Info().SetTitle("lollipop").SetMessage(done).Show()
+	}
+	u.refreshClaudeStatus()
+}
+
+// claudeStartup silently repairs an installed hook (e.g. the exe was moved) and asks once whether to install it.
+func (u *ui) claudeStartup() {
+	defer u.refreshClaudeStatus()
+	switch claudeHooksStatus() {
+	case hooksBroken:
+		_ = installClaudeHooks()
+		return
+	case hooksAbsent:
+	default:
+		return
+	}
+	if _, err := os.Stat(claudeConfigDir()); err != nil || u.get().ClaudePrompted {
+		return
+	}
+	d := u.app.Dialog.Question().SetTitle("lollipop").SetMessage(tr(
+		"Show Claude Code sessions running outside Orca too?\n\nlollipop adds a hook to your Claude Code user settings ("+
+			claudeSettingsPath()+"), with a backup. You can remove it any time from the Claude Code menu.",
+		"Mostrare anche le sessioni di Claude Code fuori da Orca?\n\nlollipop aggiunge un hook alle impostazioni utente di Claude Code ("+
+			claudeSettingsPath()+"), con un backup. Puoi rimuoverlo quando vuoi dal menu Claude Code."))
+	// Windows shows a system Yes/No box (localized by Windows) and matches the pressed button by these English labels.
+	yesLabel, noLabel := "Yes", "No"
+	if runtime.GOOS != "windows" {
+		yesLabel, noLabel = tr("Yes", "Sì"), tr("No", "No")
+	}
+	yes, no := d.AddButton(yesLabel), d.AddButton(noLabel)
+	yes.OnClick(func() {
+		u.change(func(s *settings) { s.ClaudePrompted = true })
+		u.claudeAction(installClaudeHooks, tr("Claude Code integration installed.", "Integrazione con Claude Code installata."))
+	})
+	no.OnClick(func() { u.change(func(s *settings) { s.ClaudePrompted = true }) })
+	d.SetDefaultButton(yes).SetCancelButton(no).Show()
 }

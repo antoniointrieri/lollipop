@@ -200,3 +200,126 @@ Esci
   per non condividere gli handle nativi, e i segni di spunta vengono tenuti allineati tra i due.
 - Poiché la finestra ora si può nascondere, si esce solo da "Esci": chiudere la finestra non termina l'app
   (su macOS `ApplicationShouldTerminateAfterLastWindowClosed: false`).
+
+## 9. v0.2 — sessioni Claude Code fuori da Orca
+
+> Stato: **approvata** (2026-09-25).
+
+Oltre agli agenti di Orca, lollipop mostra le sessioni di Claude Code avviate altrove: Windows Terminal, console,
+terminale di VS Code o IntelliJ, e così via. Non serve nessuna configurazione per programma. Riferimenti:
+[claudepulse-win](https://github.com/stantheman0128/claudepulse-win), [soundpad](https://github.com/davidef393s/soundpad)
+e lo script hook di Orca stessa (`~/.orca/agent-hooks/claude-hook.cmd`).
+
+### Comportamento
+
+- **Voci**: sono mescolate a quelle di Orca nella stessa lista, ordinata per nome, con lo stesso stile. Il nome è la
+  cartella della sessione (base di `cwd`). La provenienza compare solo nel tooltip:
+  `[stato] cartella` + `Claude Code in Windows Terminal`.
+- **Stati** ricavati dagli hook:
+
+  | Evento hook | Stato |
+  |---|---|
+  | `SessionStart` | done (sessione aperta, in attesa del primo prompt; non lampeggia) |
+  | `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure` | working |
+  | `PermissionRequest`, `Notification` (`permission_prompt`, `elicitation_dialog`) | waiting |
+  | `Stop` | done |
+  | `StopFailure` | blocked (rosso) |
+  | `SessionEnd` | la voce sparisce |
+
+  Il blu (monitoring) non esiste per queste sessioni: gli hook non dicono se restano processi in background.
+- **Sessioni morte**: se il processo di Claude Code non esiste più (Ctrl+C, finestra chiusa, crash: `SessionEnd`
+  non è garantito), la voce sparisce al poll successivo.
+- **Lampeggio**: le regole sono quelle della §3.2. "Stai guardando l'agente" qui significa che la finestra che
+  ospita la sessione è in primo piano. Per un IDE con più finestre conta quella che ha la cartella nel titolo.
+  Limite accettato: con più schede Claude nella stessa finestra di Windows Terminal, una sessione può risultare
+  "vista" anche se stai guardando un'altra scheda.
+- **Clic**: porta davanti la finestra che ospita la sessione, ripristinandola se è minimizzata.
+
+  | Dove gira | Cosa viene portato davanti |
+  |---|---|
+  | console classica (cmd, PowerShell) | la finestra esatta |
+  | Windows Terminal | la finestra giusta, non la scheda |
+  | VS Code / Cursor / IntelliJ | la finestra dell'IDE con la cartella nel titolo, non il pannello del terminale |
+  | macOS | l'app ospite (non verificato) |
+  | WSL, SSH, container | niente: lo stato si vede, il clic non fa nulla |
+
+- **Sessioni dentro Orca**: l'hook le ignora (variabile `ORCA_PANE_KEY` presente) perché le mostra già Orca.
+
+### Installazione dell'hook
+
+- **Primo avvio**: se esiste `~/.claude`, un dialogo chiede "Mostrare anche le sessioni di Claude Code fuori da
+  Orca?". La risposta viene salvata in `settings.json` e la domanda non si ripete.
+- **Menu**, sottomenu **Claude Code**: una riga di stato non cliccabile (`Integrazione: attiva` / `non installata` /
+  `da riparare`), poi **Installa** (che dopo l'installazione diventa **Ripara**) e **Rimuovi integrazione**.
+- **Cosa scrive**: in `~/.claude/settings.json` (impostazioni utente, quindi valide ovunque giri Claude Code), per
+  ogni evento della tabella aggiunge un hook di tipo command:
+  `"<percorso>/lollipop.exe" hook || echo {}`, con `"async": true`. Se l'exe non esiste più, il comando restituisce
+  `{}`, cioè nessun effetto: nessun blocco e nessun errore. È lo stesso schema usato da Orca. Con `async`, Claude
+  non aspetta l'hook: su Windows il solo avvio di un processo costa circa 200 ms (misurato, anche con un exe Go
+  vuoto), e senza `async` ogni uso di uno strumento lo pagherebbe.
+- **Senza far danni**:
+  - prima di ogni modifica viene fatto un backup in `settings.json.lollipop-bak`;
+  - vengono toccate solo le voci di lollipop, riconosciute da `lollipop… hook` nel comando;
+  - gli hook degli altri (Orca compresa) restano intatti;
+  - le altre chiavi del file restano nello stesso ordine. Il file viene riscritto con indentazione di 2 spazi,
+    lo stesso formato che usa Claude Code.
+- **Auto-riparazione**: se l'integrazione è attiva ma l'exe è stato spostato, all'avvio lollipop aggiorna il
+  percorso negli hook, senza chiedere.
+- **Rimuovi integrazione** toglie solo le voci di lollipop. Chi cancella l'exe senza passare dal menu lascia voci
+  inerti, che non fanno danni.
+
+### Implementazione
+
+- **`lollipop hook`** (stesso binario, sottocomando) viene eseguito da Claude Code a ogni evento. Deve durare
+  pochi millisecondi. Nell'ordine:
+  1. esce subito se c'è `ORCA_PANE_KEY`;
+  2. legge il JSON da stdin;
+  3. trova il processo di Claude Code (`CLAUDE_PID` se presente, altrimenti risalendo i processi antenati) e il
+     processo ospite, cioè il primo antenato con una finestra visibile;
+  4. scrive `<UserConfigDir>/lollipop/claude/<session_id>.json` in modo atomico (file temporaneo + rename). Il file
+     contiene stato, `cwd`, pid e ora di creazione del processo di Claude, pid e nome dell'ospite, e l'ora
+     dell'evento.
+
+  Un evento più vecchio di quello già scritto viene scartato, perché gli hook possono sovrapporsi. `SessionEnd`
+  cancella il file.
+- **App**: a ogni poll legge la cartella. Cancella i file la cui sessione è morta, cioè quando il pid non esiste
+  più o ha un'ora di creazione diversa (pid riciclato). Unisce le voci a quelle di Orca con chiave
+  `claude:<session_id>`. Il clic e il controllo "sta guardando" passano dalla sorgente della voce: Orca oppure
+  finestra ospite.
+- **Codice di piattaforma**:
+  - Windows: Toolhelp32 per i processi antenati e `EnumWindows` per le finestre dell'ospite;
+  - macOS: `NSRunningApplication` dell'antenato, scritto alla cieca.
+- **Verificato** (Claude Code 2.1.282, Windows): gli hook girano in Git Bash; `CLAUDE_PID` arriva all'hook ed è
+  il pid di `claude.exe`. Nella console classica viene trovata la finestra esatta; dentro Orca, risalendo i
+  processi, viene trovato `Orca.exe`. Se si uccide Claude, la voce sparisce al poll successivo.
+- **Ancora da verificare** su una macchina che li usa: Windows Terminal, VS Code e IntelliJ; se le sessioni già
+  aperte leggono subito i nuovi hook o solo al riavvio.
+- **Orca non avviato non è più un errore**, perché ora lollipop serve anche a chi usa solo Claude Code. Se non si
+  riesce a leggere `orca-runtime.json` o a connettersi alla pipe, semplicemente non ci sono voci di Orca. Il
+  pallino rosso resta per gli errori di protocollo, cioè quando la pipe risponde ma in modo inatteso.
+
+### Fuori scope
+
+Rispondere ai permessi dal semaforo (come soundpad), selezionare la scheda o il pannello esatto, WSL/SSH/container,
+installer, altri strumenti come Codex o Gemini.
+
+## 10. v0.2 — lingua dell'interfaccia
+
+> Stato: **approvata** (2026-09-25).
+
+- **Lingue**: inglese (predefinita) e italiano.
+- **Scelta automatica**: italiano se la lingua dell'interfaccia del sistema operativo è l'italiano, altrimenti
+  inglese.
+  - Windows: `GetUserDefaultUILanguage`.
+  - macOS: la prima lingua preferita dell'utente (`NSLocale.preferredLanguages`), non verificato.
+- **Menu**: nuovo sottomenu **Language / Lingua ▸ ◉ Automatica · English · Italiano**. L'etichetta è bilingue, così
+  la si trova anche se l'interfaccia è nella lingua che non si capisce. La scelta ha effetto subito: i menu della
+  finestra e della traybar vengono ricostruiti, e la finestra e il tooltip dell'icona si aggiornano al poll
+  successivo. Si salva in `settings.json` (`lang`: `auto` | `en` | `it`).
+- **Cosa viene tradotto**: menu, dialoghi, tooltip (finestra e traybar), messaggi d'errore e l'output di `-once`.
+- **Cosa non viene tradotto**: i nomi degli stati tra parentesi quadre nel tooltip (`[working]`, `[done]`, …),
+  perché sono quelli di Orca e di Claude Code.
+- **Implementazione**: niente librerie e niente file di traduzione. Ogni testo si scrive dove serve come
+  `tr("English", "Italiano")`, che restituisce la versione della lingua attiva. Il frontend riceve la lingua con
+  l'evento `settings` e ha i suoi due testi ("Nessun agente attivo", "Errore").
+- **README**: la nota "The UI is in Italian" diventa "English and Italian, following the OS language".

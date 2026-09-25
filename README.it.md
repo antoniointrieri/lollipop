@@ -31,6 +31,9 @@ Il nome viene dal *lollipop man* inglese, il vigile con la paletta tonda che dic
 - **Lampeggia** quando un agente ha appena finito e non l'hai ancora guardato. Smette quando clicchi la voce,
   quando apri quel pannello in Orca o quando l'agente riparte. Se stavi già guardando l'agente, non lampeggia.
 - **Clic su una voce**: Orca va in primo piano, direttamente sul terminale di quell'agente.
+- **Anche Claude Code puro**: le sessioni avviate fuori da Orca (Windows Terminal, console, terminale di VS Code
+  o IntelliJ, ...) compaiono nella stessa lista. lollipop trova da solo la finestra che le ospita, e il clic la
+  porta davanti. Vedi [Sessioni Claude Code](#sessioni-claude-code).
 - **Icona nella traybar** nel colore dell'agente più urgente, con un riepilogo nel tooltip
   (`lollipop — 1 in attesa, 1 done, 2 working`). Puoi anche nascondere la finestra e tenere solo l'icona.
 - **Si adatta**: cresce verso sinistra tenendo fermo il bordo destro, resta sopra la taskbar, funziona su più
@@ -97,15 +100,31 @@ Impostazioni disponibili dal menu (hanno effetto subito e vengono salvate):
 - **Dimensione**: piccola, normale o grande
 - **Compatta**: solo i pallini, con il nome nel tooltip
 - **Sempre in primo piano** e **Mostra finestra**
+- **Claude Code**: stato dell'integrazione, **Installa** (poi **Ripara**), **Rimuovi integrazione**
+- **Language / Lingua**: automatica (lingua del sistema operativo), English o Italiano
 
 Impostazioni e posizione stanno in `settings.json`, dentro `%APPDATA%\lollipop` (Windows) o
 `~/Library/Application Support/lollipop` (macOS).
 Alt+F4 nasconde la finestra e non chiude l'app: per uscire usa **Esci**.
 
+### Sessioni Claude Code
+
+Al primo avvio lollipop propone di aggiungere un hook alle impostazioni utente di Claude Code
+(`~/.claude/settings.json`, con backup). L'hook esegue `lollipop.exe hook` in background a ogni evento di Claude
+Code, e Claude non lo aspetta mai. Le sessioni dentro Orca vengono ignorate, perché le mostra già Orca.
+
+Il sottomenu **Claude Code** mostra se l'integrazione è attiva e permette di ripararla o rimuoverla. La
+rimozione tocca solo le voci di lollipop; se cancelli l'exe senza rimuoverla, le voci rimaste non fanno nulla.
+Se sposti l'exe, lollipop corregge il percorso al successivo avvio.
+
+Il clic porta davanti la finestra giusta, non la scheda esatta: Windows Terminal e gli IDE non permettono ad
+altre app di selezionare una scheda o un pannello del terminale. Per le sessioni in WSL, SSH o container si
+vede lo stato, ma il clic non fa nulla.
+
 ### Se qualcosa non va
 
-Il pallino rosso con "Errore" nel tooltip vuol dire che lollipop non riesce a parlare con Orca (per esempio
-perché Orca è chiuso): riprova da solo ogni mezzo secondo. Per vedere cosa legge da Orca:
+Il pallino rosso con "Errore" nel tooltip vuol dire che Orca ha risposto in modo inatteso (per esempio dopo
+un aggiornamento di Orca); lollipop riprova da solo ogni mezzo secondo. Orca chiuso non è un errore. Per vedere cosa legge da Orca:
 
 ```sh
 lollipop.exe -once | more     # Windows
@@ -142,6 +161,7 @@ La UI è fatta con [Wails v3](https://github.com/wailsapp/wails): backend Go e u
 ```
 main.go               avvio, loop di polling, eventi tra Go e frontend
 orca.go               client del runtime di Orca
+claude.go             sessioni Claude Code pure: hook, file di sessione, installazione in settings.json
 state.go              voci, lampeggio, riepilogo per la traybar (logica pura, testata)
 ui.go                 impostazioni, menu, traybar, posizione, disegno dell'icona
 platform_*.go         codice specifico di Windows e macOS
@@ -150,6 +170,8 @@ docs/spec.md          specifica: comportamento e decisioni
 ```
 
 - Test: `go test ./...`
+- Le novità significative vanno in [CHANGELOG.md](CHANGELOG.md), in inglese: la sezione di una versione diventa il testo
+  della sua Release.
 - La CI (`.github/workflows/build.yml`) testa e compila Windows e macOS a ogni push; un tag `v*` pubblica anche
   una GitHub Release con i due binari.
 - L'icona dell'exe (`lollipop.ico`, `rsrc_windows_amd64.syso`) è disegnata dal codice in `ui.go`. Se cambi il

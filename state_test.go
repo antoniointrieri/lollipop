@@ -23,7 +23,7 @@ func TestBuildSnapshot(t *testing.T) {
 	must(`{"entries":{"t1:l1":{"payload":{"workingMode":"monitoring"}}}}`, &hooks)
 
 	s := buildSnapshot(wt, tl, hooks)
-	if len(s.Agents) != 2 { // t9:l9 senza terminale: sessione chiusa, ignorata
+	if len(s.Agents) != 2 { // t9:l9 has no terminal: closed session
 		t.Fatalf("agenti: %+v", s.Agents)
 	}
 	if a := s.Agents[0]; a.Label != "alfa/feat" || a.Handle != "h2" || a.State != "done" {
@@ -43,7 +43,9 @@ func TestTrackerBlink(t *testing.T) {
 		return snapshot{Agents: []agent{{Key: "k", State: state}}, Focused: focused}
 	}
 	front := false
-	blink := func(s snapshot) bool { return tr.update(s, func() bool { return front })[0].Blink }
+	blink := func(s snapshot) bool {
+		return tr.update(s, func(a agent) bool { return front && a.Key == s.Focused })[0].Blink
+	}
 
 	if blink(snap("done", "")) {
 		t.Error("all'avvio non deve lampeggiare")
@@ -78,13 +80,13 @@ func TestTrackerBlink(t *testing.T) {
 
 func TestSummary(t *testing.T) {
 	items := []item{{State: "working"}, {State: "working"}, {State: "done"}, {State: "blocked"}}
-	if c, tip := summary(items, ""); c != "red" || tip != "lollipop — 1 in attesa, 1 done, 2 working" {
+	if c, tip := summary(items, ""); c != "red" || tip != "lollipop — 1 waiting, 1 done, 2 working" {
 		t.Errorf("%s %q", c, tip)
 	}
 	if c, _ := summary(items[:3], ""); c != "green" {
 		t.Errorf("senza attese: %s", c)
 	}
-	if c, tip := summary(nil, ""); c != "gray" || tip != "lollipop — nessun agente attivo" {
+	if c, tip := summary(nil, ""); c != "gray" || tip != "lollipop — no active agents" {
 		t.Errorf("%s %q", c, tip)
 	}
 	if c, _ := summary(items, "pipe chiusa"); c != "red" {

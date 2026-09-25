@@ -1,26 +1,20 @@
-// lollipop: semaforo per gli agenti di Orca. Finestrella sempre in primo piano, un pallino per agente.
-//
-//	giallo = working, verde = done, blu = turno finito ma comandi in background ancora attivi,
-//	rosso = qualsiasi altro stato (blocked/waiting: attesa input o permesso)
-//	lampeggia = ha appena smesso di lavorare e non l'hai ancora guardato
-//
-// Clic sulla voce -> apre Orca su quell'agente. Tasto destro (anche sull'icona nella traybar) -> impostazioni ed Esci.
-// Trascina dalla maniglia a sinistra.
-// Debug: lollipop -once (su Windows, binario GUI: lollipop.exe -once | more)
+// lollipop: an always-on-top traffic light for AI agents running in Orca and in plain Claude Code sessions.
+// See README.md and docs/spec.md.
 package main
 
-// Icona dell'exe: lollipop.ico (disegnata da ui.go) -> risorsa Windows incorporata da "go build".
 //go:generate go test -run TestAppIcon -update
 //go:generate go run github.com/tc-hib/go-winres@v0.3.3 simply --icon lollipop.ico --manifest none --arch amd64
 
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,19 +28,16 @@ var assets embed.FS
 const pollInterval = 500 * time.Millisecond
 
 func main() {
-	once := flag.Bool("once", false, "stampa agenti e pannello attivo, poi esce")
+	if len(os.Args) > 1 && os.Args[1] == "hook" { // run by Claude Code on every hook event: keep it fast
+		runHook()
+	}
+	s := loadSettings()
+	uiLang.Store(resolveLang(s.Lang))
+	once := flag.Bool("once", false, tr("print agents and the active pane, then exit", "stampa agenti e pannello attivo, poi esce"))
 	flag.Parse()
 	orca := &orcaClient{}
 	if *once {
-		s, err := orca.poll()
-		if err != nil {
-			fmt.Println("Errore:", err)
-			os.Exit(1)
-		}
-		for _, a := range s.Agents {
-			fmt.Printf("%-10s %-30s %-40s %s\n", a.State, a.Label, a.Title, a.Handle)
-		}
-		fmt.Println("Focused:", s.Focused, " Orca in primo piano:", orcaInFront(orca.orcaPID()))
+		printOnce(orca)
 		return
 	}
 
@@ -55,38 +46,39 @@ func main() {
 		Name:   "lollipop",
 		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(frontend)},
 		Mac: application.MacOptions{
-			ActivationPolicy: application.ActivationPolicyAccessory, // niente icona nel Dock
-			ApplicationShouldTerminateAfterLastWindowClosed: false, // si esce solo da "Esci"
+			ActivationPolicy: application.ActivationPolicyAccessory, // no Dock icon
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 		Windows: application.WindowsOptions{DisableQuitOnLastWindowClosed: true},
 	})
-	u := &ui{app: app, s: loadSettings()}
+	u := &ui{app: app, s: s}
 	u.win = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "lollipop",
-		Width: 60, Height: 36, // provvisori: il frontend comunica la dimensione vera con l'evento "size"
+		Width: 60, Height: 36, // replaced by the "size" event from the frontend
 		Frameless: true, AlwaysOnTop: u.s.AlwaysOnTop, DisableResize: true, Hidden: true,
 		BackgroundColour:           application.NewRGB(32, 32, 36),
 		DefaultContextMenuDisabled: true,
 		Windows:                    application.WindowsWindow{HiddenOnTaskbar: true},
 	})
-	// Chiudere la finestra (es. Alt+F4) la nasconde soltanto: si ritrova dall'icona nella traybar.
 	u.win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
-		e.Cancel()
+		e.Cancel() // Alt+F4 only hides the window; quitting is "Esci"
 		go u.change(func(s *settings) { s.ShowWindow = false })
 	})
-	menu := app.ContextMenu.New()
-	u.buildMenu(menu.Menu)
-	app.ContextMenu.Add("main", menu)
 	u.setupTray()
+	u.buildMenus()
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		go u.claudeStartup()
+	})
 
 	tr := newTracker()
 	var mu sync.Mutex
-	lastSig := "" // ultimo stato inviato al frontend: si reinvia solo se cambia
+	lastSig := ""
+	agents := map[string]agent{}
 
-	app.Event.On("ready", func(*application.CustomEvent) { // frontend (ri)caricato: reinvia impostazioni e stato
-		app.Event.Emit("settings", u.get())
+	app.Event.On("ready", func(*application.CustomEvent) {
+		u.emitSettings(u.get())
 		mu.Lock()
-		lastSig = ""
+		lastSig = "" // resend the state to a (re)loaded frontend
 		mu.Unlock()
 	})
 	app.Event.On("size", func(e *application.CustomEvent) {
@@ -100,10 +92,16 @@ func main() {
 	app.Event.On("focus", func(e *application.CustomEvent) {
 		m, _ := e.Data.(map[string]any)
 		key, _ := m["key"].(string)
-		handle, _ := m["handle"].(string)
 		tr.seen(key)
+		mu.Lock()
+		a := agents[key]
+		mu.Unlock()
+		if a.Host != nil {
+			activateHost(*a.Host)
+			return
+		}
 		activateOrca(orca.orcaPID())
-		if err := orca.focusTerminal(handle); err != nil {
+		if err := orca.focusTerminal(a.Handle); err != nil {
 			log.Println("terminal.focus:", err)
 		}
 	})
@@ -115,11 +113,16 @@ func main() {
 			}
 		}
 	}()
-	// Polling fuori dal thread UI: se Orca e' lento o bloccato la finestra resta reattiva.
-	go func() {
+	go func() { // off the UI thread: a slow or stuck Orca must not freeze the window
 		for range time.Tick(pollInterval) {
-			s, err := orca.poll()
-			items, errMsg := tr.update(s, func() bool { return orcaInFront(orca.orcaPID()) }), ""
+			s, err := pollAll(orca)
+			seen := func(a agent) bool {
+				if a.Host != nil {
+					return hostInFront(*a.Host)
+				}
+				return a.Key == s.Focused && orcaInFront(orca.orcaPID())
+			}
+			items, errMsg := tr.update(s, seen), ""
 			if err != nil {
 				errMsg = err.Error()
 			}
@@ -129,6 +132,10 @@ func main() {
 			mu.Lock()
 			changed := string(sig) != lastSig
 			lastSig = string(sig)
+			clear(agents)
+			for _, a := range s.Agents {
+				agents[a.Key] = a
+			}
 			mu.Unlock()
 			if changed {
 				app.Event.Emit("agents", msg)
@@ -139,4 +146,28 @@ func main() {
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// pollAll merges Orca agents and plain Claude Code sessions. Orca not running is not an error:
+// the user may only use Claude Code.
+func pollAll(orca *orcaClient) (snapshot, error) {
+	s, err := orca.poll()
+	if errors.Is(err, errOrcaAbsent) {
+		err = nil
+	}
+	s.Agents = append(s.Agents, loadClaudeSessions()...)
+	sortAgents(s.Agents)
+	return s, err
+}
+
+func printOnce(orca *orcaClient) {
+	s, err := pollAll(orca)
+	if err != nil {
+		fmt.Println(tr("Error:", "Errore:"), err)
+	}
+	for _, a := range s.Agents {
+		fmt.Printf("%-10s %-30s %-40s %s\n", a.State, a.Label, a.Title, strings.TrimSpace(a.Handle))
+	}
+	fmt.Println(tr("Focused:", "Pannello attivo:"), s.Focused, tr(" Orca in front:", " Orca in primo piano:"), orcaInFront(orca.orcaPID()))
+	fmt.Println(tr("Claude Code integration:", "Integrazione Claude Code:"), claudeHooksStatus().label())
 }

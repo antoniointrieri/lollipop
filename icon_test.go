@@ -12,8 +12,8 @@ import (
 
 var update = flag.Bool("update", false, "rigenera lollipop.ico")
 
-// Non e' un test: genera l'icona dell'exe (lollipop.ico -> rsrc_windows_amd64.syso) con lo stesso disegno
-// dell'icona della traybar, in rosso. Gira solo con -update, cioe' da "go generate".
+// Not a real test: it writes lollipop.ico (-> rsrc_windows_amd64.syso) from the tray icon drawing.
+// It runs only with -update, i.e. from "go generate".
 func TestAppIcon(t *testing.T) {
 	if !*update {
 		t.Skip("solo con -update (go generate)")
@@ -27,7 +27,7 @@ func TestAppIcon(t *testing.T) {
 		}
 		pngs = append(pngs, buf.Bytes())
 	}
-	// Formato ICO: intestazione, una voce di 16 byte per immagine, poi le immagini (PNG, ammesso da Vista in poi).
+	// ICO: header, one 16-byte entry per image, then the images (PNG payloads are fine since Vista).
 	var ico bytes.Buffer
 	le := func(v ...any) {
 		for _, x := range v {
@@ -37,7 +37,7 @@ func TestAppIcon(t *testing.T) {
 	le(uint16(0), uint16(1), uint16(len(sizes)))
 	offset := 6 + 16*len(sizes)
 	for i, n := range sizes {
-		le(uint8(n%256), uint8(n%256), uint8(0), uint8(0), uint16(1), uint16(32), uint32(len(pngs[i])), uint32(offset)) // 256 si scrive 0
+		le(uint8(n%256), uint8(n%256), uint8(0), uint8(0), uint16(1), uint16(32), uint32(len(pngs[i])), uint32(offset)) // 256 is written as 0
 		offset += len(pngs[i])
 	}
 	for _, p := range pngs {

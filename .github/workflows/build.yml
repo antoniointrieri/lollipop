@@ -54,9 +54,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
-      - run: gh release create "$GITHUB_REF_NAME" lollipop.exe lollipop-macos.tar.gz --repo "$GITHUB_REPOSITORY" --generate-notes
+      - name: release (notes from CHANGELOG.md)
+        run: |
+          awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ || /^\[[0-9]/ {f=0} f' CHANGELOG.md > notes.md
+          if grep -q '[^[:space:]]' notes.md; then notes=(--notes-file notes.md); else notes=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" lollipop.exe lollipop-macos.tar.gz --repo "$GITHUB_REPOSITORY" "${notes[@]}"
         env:
           GH_TOKEN: ${{ github.token }}

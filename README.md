@@ -33,8 +33,11 @@ when it's their turn.
   open that pane in Orca, or the agent starts working again. If you were already looking at the agent, it doesn't
   blink.
 - **Click an entry** to bring Orca to the front, right on that agent's terminal.
+- **Plain Claude Code too**: sessions started outside Orca (Windows Terminal, a console, the VS Code or IntelliJ
+  terminal, ...) show up in the same list. lollipop finds the hosting window by itself, and clicking the entry
+  brings that window to the front. See [Claude Code sessions](#claude-code-sessions).
 - **Tray icon** in the color of the most urgent agent, with a summary in its tooltip
-  (`lollipop — 1 in attesa, 1 done, 2 working`). You can hide the window and keep only the icon.
+  (`lollipop — 1 waiting, 1 done, 2 working`). You can hide the window and keep only the icon.
 - **Stays out of the way**: grows to the left keeping its right edge fixed, stays above the taskbar, works across
   multiple monitors and remembers where you left it.
 
@@ -45,7 +48,7 @@ when it's their turn.
 </p>
 <p align="center"><sub>Compact view and tray icons</sub></p>
 
-> The UI (menu, tooltips) is in Italian.
+> The UI is in English or Italian, following the OS language; you can switch it from the menu.
 
 ## Requirements
 
@@ -91,25 +94,41 @@ add it to *Login Items*.
 |---|---|
 | Click an entry | opens Orca on the agent's terminal |
 | Drag the `⋮` handle | moves the window |
-| Right-click (window or tray icon) | settings menu and **Esci** (quit) |
+| Right-click (window or tray icon) | settings menu and **Quit** |
 | Click the tray icon | shows the window and brings it to the front |
 
 Settings, available from the menu, apply immediately and are saved:
 
-- **Forma** (shape): rectangle or pill
-- **Lampeggio** (blink): slow, normal or fast
-- **Dimensione** (size): small, normal or large
-- **Compatta** (compact): dots only, with the name in the tooltip
-- **Sempre in primo piano** (always on top) and **Mostra finestra** (show window)
+- **Shape**: rectangle or pill
+- **Blinking**: slow, normal or fast
+- **Size**: small, normal or large
+- **Compact**: dots only, with the name in the tooltip
+- **Always on top** and **Show window**
+- **Claude Code**: integration status, **Install** (then **Repair**), **Remove integration**
+- **Language / Lingua**: automatic (OS language), English or Italiano
 
 Settings and window position are stored in `settings.json` inside `%APPDATA%\lollipop` (Windows) or
 `~/Library/Application Support/lollipop` (macOS). Alt+F4 hides the window instead of closing the app: use
-**Esci** to quit.
+**Quit**.
+
+### Claude Code sessions
+
+On first start lollipop offers to add a hook to your Claude Code user settings (`~/.claude/settings.json`, with
+a backup). The hook runs `lollipop.exe hook` in the background on every Claude Code event: Claude never waits
+for it. Sessions running inside Orca are skipped, since Orca already shows them.
+
+The **Claude Code** submenu shows whether the integration is active and lets you repair or remove it. Removing
+it only touches lollipop's own entries; if you delete the exe without removing it, the leftover entries do
+nothing. If you move the exe, lollipop fixes the path on its next start.
+
+Clicking an entry brings the right window to the front, not the exact tab: Windows Terminal and IDEs don't let
+other apps select a tab or a terminal panel. Sessions inside WSL, SSH or containers show their state, but
+clicking them does nothing.
 
 ### Troubleshooting
 
-A red dot with "Errore" in the tooltip means lollipop can't talk to Orca (for example because Orca is closed);
-it keeps retrying every half second. To see what it reads from Orca:
+A red dot with "Error" in the tooltip means Orca answered in an unexpected way (for example after an Orca
+update); lollipop keeps retrying every half second. A closed Orca is not an error. To see what it reads from Orca:
 
 ```sh
 lollipop.exe -once | more     # Windows
@@ -146,6 +165,7 @@ binary.
 ```
 main.go               startup, polling loop, Go <-> frontend events
 orca.go               client for Orca's runtime
+claude.go             plain Claude Code sessions: hook, session files, settings.json install
 state.go              entries, blinking, tray summary (pure logic, tested)
 ui.go                 settings, menus, tray, window position, icon drawing
 platform_*.go         Windows- and macOS-specific code
@@ -154,6 +174,7 @@ docs/spec.md          specification: behavior and decisions (Italian)
 ```
 
 - Tests: `go test ./...`
+- Notable changes go in [CHANGELOG.md](CHANGELOG.md); the section of a version becomes its Release notes.
 - CI (`.github/workflows/build.yml`) tests and builds Windows and macOS on every push; pushing a `v*` tag also
   publishes a GitHub Release with both binaries.
 - The executable icon (`lollipop.ico`, `rsrc_windows_amd64.syso`) is drawn by the code in `ui.go`. If you change
