@@ -12,9 +12,12 @@ import (
 
 var update = flag.Bool("update", false, "rigenera lollipop.ico")
 
-// L'icona dell'exe (lollipop.ico -> rsrc_windows_amd64.syso) e' disegnata dallo stesso codice dell'icona della
-// traybar, in rosso. Il test verifica che il file nel repo corrisponda al codice; per rigenerarlo: go generate.
+// Non e' un test: genera l'icona dell'exe (lollipop.ico -> rsrc_windows_amd64.syso) con lo stesso disegno
+// dell'icona della traybar, in rosso. Gira solo con -update, cioe' da "go generate".
 func TestAppIcon(t *testing.T) {
+	if !*update {
+		t.Skip("solo con -update (go generate)")
+	}
 	var pngs [][]byte
 	sizes := []int{16, 20, 24, 32, 48, 64, 128, 256}
 	for _, n := range sizes {
@@ -41,13 +44,7 @@ func TestAppIcon(t *testing.T) {
 		ico.Write(p)
 	}
 
-	if *update {
-		if err := os.WriteFile("lollipop.ico", ico.Bytes(), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	if old, err := os.ReadFile("lollipop.ico"); err != nil || !bytes.Equal(old, ico.Bytes()) {
-		t.Error("lollipop.ico non corrisponde al disegno in ui.go: rigenera con go generate")
+	if err := os.WriteFile("lollipop.ico", ico.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -191,7 +191,7 @@ Esci
 - `settings.json` contiene anche `alwaysOnTop` e `showWindow`.
 - **Icona dell'exe** (Esplora risorse, collegamenti): lo stesso lollipop in rosso, in `lollipop.ico` (da 16 a 256 px)
   incorporato come risorsa Windows (`rsrc_windows_amd64.syso`, creato con `go-winres`). Entrambi i file sono nel
-  repo e si rigenerano con `go generate`; `TestAppIcon` segnala se non corrispondono più al disegno. Su macOS
+  repo e si rigenerano con `go generate`. Su macOS
   non serve nulla, finché il binario non diventa un bundle `.app`.
 
 ### Implementazione

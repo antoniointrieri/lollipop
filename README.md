@@ -157,7 +157,7 @@ docs/spec.md          specification: behavior and decisions (Italian)
 - CI (`.github/workflows/build.yml`) tests and builds Windows and macOS on every push; pushing a `v*` tag also
   publishes a GitHub Release with both binaries.
 - The executable icon (`lollipop.ico`, `rsrc_windows_amd64.syso`) is drawn by the code in `ui.go`. If you change
-  the drawing, regenerate it with `go generate`; `TestAppIcon` fails until you do.
+  the drawing, regenerate it with `go generate`.
 
 ## License
 

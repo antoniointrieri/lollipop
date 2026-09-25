@@ -153,7 +153,7 @@ docs/spec.md          specifica: comportamento e decisioni
 - La CI (`.github/workflows/build.yml`) testa e compila Windows e macOS a ogni push; un tag `v*` pubblica anche
   una GitHub Release con i due binari.
 - L'icona dell'exe (`lollipop.ico`, `rsrc_windows_amd64.syso`) è disegnata dal codice in `ui.go`. Se cambi il
-  disegno, rigenerala con `go generate`; `TestAppIcon` fallisce finché non lo fai.
+  disegno, rigenerala con `go generate`.
 
 ## Licenza
 
