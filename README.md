@@ -2,7 +2,9 @@
 
 Semaforo per gli agenti di Orca: finestrella sempre in primo piano, una voce per agente
 (giallo = working, verde = done, blu = monitor in background, rosso = attesa input/permesso).
-Lampeggia quando un agente ha appena finito; clic sulla voce = Orca su quel terminale; tasto destro = Esci.
+Lampeggia quando un agente ha appena finito; clic sulla voce = Orca su quel terminale.
+Tasto destro (sulla finestra o sull'icona nella traybar) = impostazioni (forma, lampeggio, dimensione, compatta,
+sempre in primo piano, mostra finestra) ed Esci. L'icona nella traybar ha il colore dell'agente più urgente.
 Dettagli in `docs/spec.md`.
 
 ## Build
@@ -17,4 +19,4 @@ Test: `go test ./...`
 - Debug: `lollipop -once` stampa agenti e pannello attivo ed esce (su Windows: `lollipop.exe -once | more`).
   Sul Mac è il primo comando da provare.
 - Avvio automatico: collegamento a `lollipop.exe` in `shell:startup` (Windows) o Elementi di login (macOS).
-- La posizione viene salvata all'uscita in `<UserConfigDir>/lollipop/position.json`.
+- Impostazioni e posizione stanno in `<UserConfigDir>/lollipop/settings.json` (`%APPDATA%\lollipop` su Windows).

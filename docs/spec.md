@@ -122,3 +122,77 @@ si torna al nome del processo.
 
 Eventi push da Orca (serve il websocket E2EE), gruppi split, host remoti, avvio automatico nel codice, suono,
 installer, firma, CI, istanza unica, log su file.
+
+## 7. v1.1 — impostazioni nel menu contestuale
+
+> Stato: **approvata** (2026-09-25).
+
+Il tasto destro apre il menu nativo con sottomenu a scelta singola; ogni scelta ha effetto subito, senza riavvio,
+e viene salvata. Niente finestra di impostazioni.
+
+```
+Forma       ▸  ◉ Rettangolo   ○ Capsula
+Lampeggio   ▸  ○ Lento (1 s)  ◉ Normale (500 ms)  ○ Veloce (250 ms)
+Dimensione  ▸  ○ Piccola (85%)  ◉ Normale  ○ Grande (125%)
+☐ Compatta
+────────────
+Esci
+```
+
+I valori predefiniti (◉) riproducono l'aspetto attuale.
+
+- **Voci come bottoni**: ogni voce ha sempre uno sfondo grigio tenue (`#3a3a42`, più chiaro della barra `#202024`), con
+  pallino e nome nel colore dello stato; al clic lo sfondo diventa `#5a5a6a` per 500 ms, come oggi.
+  - Forma: rettangolo con angoli di 3 px, oppure capsula (angoli completamente arrotondati).
+- **Lampeggio**: cambia solo il periodo dell'alternanza; le regole su quando si lampeggia restano quelle della §3.2.
+- **Dimensione**: scala insieme testo, pallini, maniglia e spaziature (tutto espresso in `em`); la finestra
+  si ridimensiona tenendo fermo il bordo destro, come sempre.
+- **Compatta**: si vede solo il pallino, senza il nome del repo; il nome resta nel tooltip.
+- Il polling resta a 500 ms: non è configurabile.
+
+### Implementazione
+
+- `settings.json` in `<UserConfigDir>/lollipop/` contiene posizione e impostazioni e sostituisce `position.json`
+  (che viene ignorato: al massimo la finestra riparte una volta dalla posizione predefinita).
+- Si salva a ogni cambio di impostazione e all'uscita (la posizione).
+- Il Go costruisce il menu con le voci già spuntate secondo `settings.json` e a ogni scelta invia al frontend
+  l'evento `settings`. Il frontend applica classi e variabili CSS e il periodo del lampeggio, ridisegna e invia di
+  nuovo `size`. Al caricamento il frontend chiede le impostazioni insieme allo stato (evento `ready`).
+
+## 8. v1.1 — sempre in primo piano e icona nella traybar
+
+> Stato: **approvata** (2026-09-25).
+
+Il menu della §7 diventa così; lo stesso menu si apre anche dal tasto destro sull'icona della traybar:
+
+```
+Forma / Lampeggio / Dimensione / ☐ Compatta     (come §7)
+────────────
+☑ Sempre in primo piano
+☑ Mostra finestra
+────────────
+Esci
+```
+
+- **Sempre in primo piano** (predefinito: attivo). Da spento la finestra è normale: niente `AlwaysOnTop` e niente
+  riaffermazione ogni 500 ms. Resta comunque fuori dalla taskbar, e la si ritrova dall'icona.
+- **Mostra finestra** (predefinito: attivo). Da spento resta solo l'icona nella traybar.
+- **Icona nella traybar**, sempre presente:
+  - **forma e colore**: un lollipop stilizzato, con la testa nel colore dell'agente più urgente, un vortice bianco
+    e un bastoncino in basso a destra. L'ordine è rosso (attesa input o permesso) > verde
+    (done) > blu (monitoring) > giallo (working). È grigio senza agenti e rosso in caso di errore di connessione.
+  - **tooltip**: il riepilogo, per esempio `lollipop — 2 working, 1 in attesa, 1 done`; con un errore mostra
+    `Errore: …`.
+  - **click sinistro**: mostra la finestra (se era nascosta riattiva "Mostra finestra") e la porta davanti.
+  - **click destro**: apre il menu.
+- Il colore e il tooltip dell'icona si aggiornano solo quando cambiano, come la finestra.
+- Le icone (5 colori) si generano all'avvio in Go con `image/png` e non ci sono file di asset.
+  Su macOS l'icona compare nella barra dei menu, a colori (non come template).
+- `settings.json` contiene anche `alwaysOnTop` e `showWindow`.
+
+### Implementazione
+
+- Il menu della finestra e quello dell'icona si costruiscono con la stessa funzione. Sono due oggetti distinti,
+  per non condividere gli handle nativi, e i segni di spunta vengono tenuti allineati tra i due.
+- Poiché la finestra ora si può nascondere, si esce solo da "Esci": chiudere la finestra non termina l'app
+  (su macOS `ApplicationShouldTerminateAfterLastWindowClosed: false`).

@@ -2,6 +2,7 @@ package main
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -147,4 +148,39 @@ func (t *tracker) seen(key string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.blink, key)
+}
+
+// summary: colore dell'icona nella traybar (agente piu' urgente) e tooltip di riepilogo.
+func summary(items []item, errMsg string) (color, tip string) {
+	if errMsg != "" {
+		tip = "lollipop — Errore: " + errMsg
+		if r := []rune(tip); len(r) > 120 { // il tooltip della traybar di Windows tiene 127 caratteri
+			tip = string(r[:120]) + "…"
+		}
+		return "red", tip
+	}
+	if len(items) == 0 {
+		return "gray", "lollipop — nessun agente attivo"
+	}
+	count := map[string]int{}
+	for _, it := range items {
+		switch it.State {
+		case "working", "done", "monitoring":
+			count[it.State]++
+		default:
+			count["waiting"]++
+		}
+	}
+	var parts []string
+	for _, g := range []struct{ state, color, label string }{ // dal piu' urgente
+		{"waiting", "red", "in attesa"}, {"done", "green", "done"}, {"monitoring", "blue", "monitoring"}, {"working", "yellow", "working"},
+	} {
+		if n := count[g.state]; n > 0 {
+			if color == "" {
+				color = g.color
+			}
+			parts = append(parts, strconv.Itoa(n)+" "+g.label)
+		}
+	}
+	return color, "lollipop — " + strings.Join(parts, ", ")
 }

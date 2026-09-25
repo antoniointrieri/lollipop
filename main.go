@@ -4,7 +4,8 @@
 //	rosso = qualsiasi altro stato (blocked/waiting: attesa input o permesso)
 //	lampeggia = ha appena smesso di lavorare e non l'hai ancora guardato
 //
-// Clic sulla voce -> apre Orca su quell'agente. Tasto destro -> Esci. Trascina dalla maniglia a sinistra.
+// Clic sulla voce -> apre Orca su quell'agente. Tasto destro (anche sull'icona nella traybar) -> impostazioni ed Esci.
+// Trascina dalla maniglia a sinistra.
 // Debug: lollipop -once (su Windows, binario GUI: lollipop.exe -once | more)
 package main
 
@@ -16,11 +17,11 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed frontend
@@ -51,31 +52,35 @@ func main() {
 		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(frontend)},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyAccessory, // niente icona nel Dock
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			ApplicationShouldTerminateAfterLastWindowClosed: false, // si esce solo da "Esci"
 		},
+		Windows: application.WindowsOptions{DisableQuitOnLastWindowClosed: true},
 	})
-	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
+	u := &ui{app: app, s: loadSettings()}
+	u.win = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "lollipop",
 		Width: 60, Height: 36, // provvisori: il frontend comunica la dimensione vera con l'evento "size"
-		Frameless: true, AlwaysOnTop: true, DisableResize: true, Hidden: true,
+		Frameless: true, AlwaysOnTop: u.s.AlwaysOnTop, DisableResize: true, Hidden: true,
 		BackgroundColour:           application.NewRGB(32, 32, 36),
 		DefaultContextMenuDisabled: true,
 		Windows:                    application.WindowsWindow{HiddenOnTaskbar: true},
 	})
-
-	menu := app.ContextMenu.New()
-	menu.Add("Esci").OnClick(func(*application.Context) {
-		savePosition(win.Bounds())
-		app.Quit()
+	// Chiudere la finestra (es. Alt+F4) la nasconde soltanto: si ritrova dall'icona nella traybar.
+	u.win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		e.Cancel()
+		go u.change(func(s *settings) { s.ShowWindow = false })
 	})
+	menu := app.ContextMenu.New()
+	u.buildMenu(menu.Menu)
 	app.ContextMenu.Add("main", menu)
+	u.setupTray()
 
 	tr := newTracker()
 	var mu sync.Mutex
 	lastSig := "" // ultimo stato inviato al frontend: si reinvia solo se cambia
-	placed := false
 
-	app.Event.On("ready", func(*application.CustomEvent) { // frontend (ri)caricato: reinvia lo stato
+	app.Event.On("ready", func(*application.CustomEvent) { // frontend (ri)caricato: reinvia impostazioni e stato
+		app.Event.Emit("settings", u.get())
 		mu.Lock()
 		lastSig = ""
 		mu.Unlock()
@@ -86,8 +91,7 @@ func main() {
 		h, _ := m["h"].(float64)
 		mu.Lock()
 		defer mu.Unlock()
-		place(app, win, int(w), int(h), !placed)
-		placed = true
+		u.place(int(w), int(h))
 	})
 	app.Event.On("focus", func(e *application.CustomEvent) {
 		m, _ := e.Data.(map[string]any)
@@ -102,17 +106,21 @@ func main() {
 
 	go func() {
 		for range time.Tick(pollInterval) {
-			keepOnTop(win)
+			if s := u.get(); s.AlwaysOnTop && s.ShowWindow {
+				keepOnTop(u.win)
+			}
 		}
 	}()
 	// Polling fuori dal thread UI: se Orca e' lento o bloccato la finestra resta reattiva.
 	go func() {
 		for range time.Tick(pollInterval) {
 			s, err := orca.poll()
-			msg := map[string]any{"items": tr.update(s, func() bool { return orcaInFront(orca.orcaPID()) }), "error": ""}
+			items, errMsg := tr.update(s, func() bool { return orcaInFront(orca.orcaPID()) }), ""
 			if err != nil {
-				msg["error"] = err.Error()
+				errMsg = err.Error()
 			}
+			u.updateTray(items, errMsg)
+			msg := map[string]any{"items": items, "error": errMsg}
 			sig, _ := json.Marshal(msg)
 			mu.Lock()
 			changed := string(sig) != lastSig
@@ -126,53 +134,5 @@ func main() {
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
-	}
-}
-
-// place ridimensiona la finestra al contenuto tenendo fermo il bordo destro, clampato allo schermo su cui si trova.
-// Al primo posizionamento parte dalla posizione salvata (o in alto a destra sullo schermo principale) e mostra la finestra.
-func place(app *application.App, win *application.WebviewWindow, w, h int, first bool) {
-	b := win.Bounds()
-	right, top := b.X+b.Width, b.Y
-	scr, _ := win.GetScreen()
-	if first {
-		scr = nil
-		if p, ok := loadPosition(); ok {
-			for _, s := range app.Screen.GetAll() {
-				if wa := s.WorkArea; p.Right > wa.X && p.Right <= wa.X+wa.Width && p.Top >= wa.Y && p.Top < wa.Y+wa.Height {
-					scr, right, top = s, p.Right, p.Top
-				}
-			}
-		}
-		if scr == nil {
-			scr = app.Screen.GetPrimary()
-			right, top = scr.WorkArea.X+scr.WorkArea.Width-80, scr.WorkArea.Y+40
-		}
-	}
-	if scr != nil {
-		right = min(right, scr.WorkArea.X+scr.WorkArea.Width)
-		win.SetBounds(application.Rect{X: max(scr.WorkArea.X, right-w), Y: top, Width: w, Height: h})
-	}
-	if first {
-		win.Show()
-	}
-}
-
-type position struct{ Right, Top int }
-
-func positionFile() string {
-	d, _ := os.UserConfigDir()
-	return filepath.Join(d, "lollipop", "position.json")
-}
-
-func loadPosition() (p position, ok bool) {
-	raw, err := os.ReadFile(positionFile())
-	return p, err == nil && json.Unmarshal(raw, &p) == nil
-}
-
-func savePosition(b application.Rect) {
-	raw, _ := json.Marshal(position{Right: b.X + b.Width, Top: b.Y})
-	if os.MkdirAll(filepath.Dir(positionFile()), 0o755) == nil {
-		_ = os.WriteFile(positionFile(), raw, 0o644)
 	}
 }

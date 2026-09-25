@@ -4,17 +4,25 @@
 <meta charset="utf-8">
 <title>lollipop</title>
 <style>
+  /* tutto in rem: la dimensione (impostazione "Dimensione") scala solo il font-size della radice */
+  html { font-size: calc(11pt * var(--scale, 1)); }
   html, body { margin: 0; background: #202024; overflow: hidden; user-select: none; cursor: default; }
-  body { font: bold 11pt "Segoe UI", -apple-system, sans-serif; --custom-contextmenu: main; }
-  #bar { display: flex; align-items: center; width: max-content; padding: 2px; white-space: nowrap; }
-  #grip { color: gray; font: 16pt "Segoe UI", -apple-system, sans-serif; padding: 0 2px; cursor: move; --wails-draggable: drag; }
-  .a { display: flex; gap: 2px; padding: 0 4px; border-radius: 3px; cursor: pointer; }
-  .a.pressed { background: #4b4b58; }
-  .empty { font-size: 18pt; }
+  body { font: bold 1rem "Segoe UI", -apple-system, sans-serif; --custom-contextmenu: main; }
+  #bar { display: flex; align-items: center; gap: 0.25rem; width: max-content; padding: 0.2rem; white-space: nowrap; }
+  #grip { color: gray; font-size: 1.45rem; font-weight: normal; padding: 0 0.1rem; cursor: move; --wails-draggable: drag; }
+  #list { display: flex; gap: 0.25rem; }
+  .a { display: flex; gap: 0.2rem; padding: 0.1rem 0.45rem; border-radius: 3px; background: #3a3a42; cursor: pointer; }
+  .pill .a { border-radius: 999px; }
+  .compact .name { display: none; }
+  /* compatta: voce quadrata (cerchio con Capsula) e pallino disegnato in CSS, cosi' e' centrato esattamente */
+  .compact .a { width: 1.5rem; height: 1.5rem; padding: 0; justify-content: center; align-items: center; }
+  .compact .dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: currentColor; font-size: 0; }
+  .a.pressed { background: #5a5a6a; }
+  .empty { font-size: 1.65rem; }
 </style>
 </head>
 <body>
-<div id="bar"><span id="grip">⋮</span><span id="list" style="display:flex"></span></div>
+<div id="bar"><span id="grip">⋮</span><span id="list"></span></div>
 <script type="module">
 import * as wails from "/wails/runtime.js";
 
@@ -22,11 +30,12 @@ const colors = { working: [255, 215, 0], done: [50, 205, 50], monitoring: [0, 19
 // lampeggio tra il colore dello stato e una sua versione al 40% (verde chiaro <-> verde scuro, ecc.)
 const rgb = (state, dim) => `rgb(${(colors[state] || [255, 0, 0]).map(v => Math.round(v * (dim ? 0.4 : 1)))})`;
 const list = document.getElementById("list"), bar = document.getElementById("bar");
-let dots = [], pressedKey = null, phase = false;
+let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer;
 
 function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
 
-function render({ items, error }) {
+function render(msg) {
+  const { items, error } = last = msg;
   list.replaceChildren();
   dots = [];
   if (!items.length) {
@@ -37,7 +46,7 @@ function render({ items, error }) {
   }
   for (const it of items) {
     const a = span("a" + (it.key === pressedKey ? " pressed" : ""), "");
-    const dot = span("", "●"), name = span("", it.label);
+    const dot = span("dot", "●"), name = span("name", it.label);
     a.title = it.tip;
     a.style.color = dot.style.color = rgb(it.state);
     a.onclick = () => click(it, a);
@@ -59,12 +68,21 @@ function click(it, a) {
   wails.Events.Emit("focus", { key: it.key, handle: it.handle });
 }
 
-setInterval(() => {
-  phase = !phase;
-  for (const { it, dot } of dots) dot.style.color = rgb(it.state, phase && it.blink);
-}, 500);
+// Impostazioni di aspetto (dal menu): forma, dimensione, compatta, periodo del lampeggio.
+function applySettings(s) {
+  document.body.classList.toggle("pill", s.shape === "pill");
+  document.body.classList.toggle("compact", s.compact);
+  document.documentElement.style.setProperty("--scale", s.scale / 100);
+  clearInterval(blinkTimer);
+  blinkTimer = setInterval(() => {
+    phase = !phase;
+    for (const { it, dot } of dots) dot.style.color = rgb(it.state, phase && it.blink);
+  }, s.blinkMs);
+  render(last); // ridisegna e comunica la nuova dimensione
+}
 
 wails.Events.On("agents", e => render(e.data));
+wails.Events.On("settings", e => applySettings(e.data));
 wails.Events.Emit("ready");
 </script>
 </body>

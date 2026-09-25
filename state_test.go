@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"image/color"
+	"image/png"
 	"testing"
 )
 
@@ -73,5 +76,48 @@ func TestTrackerBlink(t *testing.T) {
 	blink(snap("done", ""))
 	if blink(snap("working", "")) {
 		t.Error("tornato working: niente lampeggio")
+	}
+}
+
+func TestSummary(t *testing.T) {
+	items := []item{{State: "working"}, {State: "working"}, {State: "done"}, {State: "blocked"}}
+	if c, tip := summary(items, ""); c != "red" || tip != "lollipop — 1 in attesa, 1 done, 2 working" {
+		t.Errorf("%s %q", c, tip)
+	}
+	if c, _ := summary(items[:3], ""); c != "green" {
+		t.Errorf("senza attese: %s", c)
+	}
+	if c, tip := summary(nil, ""); c != "gray" || tip != "lollipop — nessun agente attivo" {
+		t.Errorf("%s %q", c, tip)
+	}
+	if c, _ := summary(items, "pipe chiusa"); c != "red" {
+		t.Errorf("errore: %s", c)
+	}
+}
+
+func TestLollipopPNG(t *testing.T) {
+	img, err := png.Decode(bytes.NewReader(lollipopPNG(color.RGBA{255, 0, 0, 255})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, a := img.At(0, 31).RGBA(); a != 0 {
+		t.Error("angolo in basso a sinistra: deve essere trasparente")
+	}
+	if r, _, _, a := img.At(2, 13).RGBA(); a>>8 != 255 || r>>8 != 255 {
+		t.Errorf("testa: deve essere rossa e opaca, e' r=%d a=%d", r>>8, a>>8)
+	}
+	white := false
+	for y := 5; y < 22; y++ {
+		for x := 5; x < 22; x++ {
+			if _, g, _, _ := img.At(x, y).RGBA(); g>>8 > 200 {
+				white = true
+			}
+		}
+	}
+	if !white {
+		t.Error("vortice bianco mancante")
+	}
+	if _, _, _, a := img.At(27, 27).RGBA(); a == 0 {
+		t.Error("bastoncino mancante")
 	}
 }
