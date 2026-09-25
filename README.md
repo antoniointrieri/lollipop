@@ -53,7 +53,7 @@ macOS è supportato solo in teoria: il codice c'è, ma non è ancora mai stato c
 ## Installazione
 
 ```sh
-git clone <url-di-questo-repo> lollipop
+git clone https://github.com/antoniointrieri/lollipop.git
 cd lollipop
 go build -ldflags "-H=windowsgui" -o lollipop.exe .
 ```
