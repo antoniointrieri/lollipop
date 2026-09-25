@@ -1,0 +1,20 @@
+# lollipop
+
+Semaforo per gli agenti di Orca: finestrella sempre in primo piano, una voce per agente
+(giallo = working, verde = done, blu = monitor in background, rosso = attesa input/permesso).
+Lampeggia quando un agente ha appena finito; clic sulla voce = Orca su quel terminale; tasto destro = Esci.
+Dettagli in `docs/spec.md`.
+
+## Build
+
+- Windows: `go build -ldflags "-H=windowsgui" -o lollipop.exe .`
+- macOS (non ancora provato): `go build -o lollipop .` su un Mac con Xcode Command Line Tools.
+
+Test: `go test ./...`
+
+## Uso
+
+- Debug: `lollipop -once` stampa agenti e pannello attivo ed esce (su Windows: `lollipop.exe -once | more`).
+  Sul Mac è il primo comando da provare.
+- Avvio automatico: collegamento a `lollipop.exe` in `shell:startup` (Windows) o Elementi di login (macOS).
+- La posizione viene salvata all'uscita in `<UserConfigDir>/lollipop/position.json`.

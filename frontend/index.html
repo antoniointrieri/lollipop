@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>lollipop</title>
+<style>
+  html, body { margin: 0; background: #202024; overflow: hidden; user-select: none; cursor: default; }
+  body { font: bold 11pt "Segoe UI", -apple-system, sans-serif; --custom-contextmenu: main; }
+  #bar { display: flex; align-items: center; width: max-content; padding: 2px; white-space: nowrap; }
+  #grip { color: gray; font: 16pt "Segoe UI", -apple-system, sans-serif; padding: 0 2px; cursor: move; --wails-draggable: drag; }
+  .a { display: flex; gap: 2px; padding: 0 4px; border-radius: 3px; cursor: pointer; }
+  .a.pressed { background: #4b4b58; }
+  .empty { font-size: 18pt; }
+</style>
+</head>
+<body>
+<div id="bar"><span id="grip">⋮</span><span id="list" style="display:flex"></span></div>
+<script type="module">
+import * as wails from "/wails/runtime.js";
+
+const colors = { working: [255, 215, 0], done: [50, 205, 50], monitoring: [0, 191, 255] };
+// lampeggio tra il colore dello stato e una sua versione al 40% (verde chiaro <-> verde scuro, ecc.)
+const rgb = (state, dim) => `rgb(${(colors[state] || [255, 0, 0]).map(v => Math.round(v * (dim ? 0.4 : 1)))})`;
+const list = document.getElementById("list"), bar = document.getElementById("bar");
+let dots = [], pressedKey = null, phase = false;
+
+function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
+
+function render({ items, error }) {
+  list.replaceChildren();
+  dots = [];
+  if (!items.length) {
+    const d = span("empty", "●");
+    d.style.color = error ? "rgb(255,0,0)" : "dimgray";
+    d.title = error ? "Errore: " + error : "Nessun agente attivo";
+    list.append(d);
+  }
+  for (const it of items) {
+    const a = span("a" + (it.key === pressedKey ? " pressed" : ""), "");
+    const dot = span("", "●"), name = span("", it.label);
+    a.title = it.tip;
+    a.style.color = dot.style.color = rgb(it.state);
+    a.onclick = () => click(it, a);
+    a.append(dot, name);
+    list.append(a);
+    dots.push({ it, dot });
+  }
+  const r = bar.getBoundingClientRect();
+  wails.Events.Emit("size", { w: Math.ceil(r.width), h: Math.ceil(r.height) });
+}
+
+// Clic: evidenzia subito la voce per 500 ms e apre l'agente; nel frattempo i clic ripetuti sono ignorati.
+function click(it, a) {
+  if (pressedKey) return;
+  pressedKey = it.key;
+  a.classList.add("pressed");
+  it.blink = false;
+  setTimeout(() => { pressedKey = null; document.querySelectorAll(".pressed").forEach(e => e.classList.remove("pressed")); }, 500);
+  wails.Events.Emit("focus", { key: it.key, handle: it.handle });
+}
+
+setInterval(() => {
+  phase = !phase;
+  for (const { it, dot } of dots) dot.style.color = rgb(it.state, phase && it.blink);
+}, 500);
+
+wails.Events.On("agents", e => render(e.data));
+wails.Events.Emit("ready");
+</script>
+</body>
+</html>
