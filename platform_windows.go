@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/w32"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -207,4 +209,54 @@ func osLanguage() string {
 		return "it"
 	}
 	return "en"
+}
+
+const (
+	runKey        = `Software\Microsoft\Windows\CurrentVersion\Run`
+	approvedKey   = `Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run`
+	autostartName = "lollipop"
+)
+
+func autostartCommand() string { return `"` + exePath() + `"` }
+
+// autostartState reads the per-user Run entry. Task Manager can disable it without removing it: then its
+// StartupApproved value starts with an odd byte (02 enabled, 03 disabled).
+func autostartState() (on, current bool) {
+	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE)
+	if err != nil {
+		return false, false
+	}
+	defer k.Close()
+	cmd, _, err := k.GetStringValue(autostartName)
+	if err != nil {
+		return false, false
+	}
+	if a, err := registry.OpenKey(registry.CURRENT_USER, approvedKey, registry.QUERY_VALUE); err == nil {
+		v, _, err := a.GetBinaryValue(autostartName)
+		a.Close()
+		if err == nil && len(v) > 0 && v[0]&1 == 1 {
+			return false, false
+		}
+	}
+	return true, cmd == autostartCommand()
+}
+
+func setAutostart(on bool) error {
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	// A "disabled" mark left by Task Manager would win over the new entry.
+	if a, err := registry.OpenKey(registry.CURRENT_USER, approvedKey, registry.SET_VALUE); err == nil {
+		_ = a.DeleteValue(autostartName)
+		a.Close()
+	}
+	if on {
+		return k.SetStringValue(autostartName, autostartCommand())
+	}
+	if err := k.DeleteValue(autostartName); err != nil && !errors.Is(err, registry.ErrNotExist) {
+		return err
+	}
+	return nil
 }

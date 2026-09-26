@@ -6,7 +6,19 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Start at login** menu item: a per-user `Run` registry entry on Windows, a LaunchAgent on macOS. An entry
+  disabled from Task Manager shows as off, and ticking the item enables it again. If the exe is moved, the
+  entry is fixed on the next start.
+- **Indicator** menu: entries can show a small lollipop head with a white spiral instead of the dot.
+
 ### Changed
+
+- With no agents the window disappears and only the tray icon stays; it comes back with the first agent. A
+  protocol error from Orca still shows the red dot.
+- The yellow of the tray icon (and of the new lollipop indicator) is slightly darker, so the white spiral stays
+  visible.
 
 - The Windows executable carries version information (name, description, version) and an application manifest,
   and is no longer stripped of debug symbols. Both changes aim at fewer false positives from heuristic antivirus

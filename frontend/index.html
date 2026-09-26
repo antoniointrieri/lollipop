@@ -19,6 +19,12 @@
   .compact .dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: currentColor; font-size: 0; }
   .a.pressed { background: #5a5a6a; }
   .empty { font-size: 1.65rem; }
+  /* lollipop marker: inline SVG, the head takes the entry color */
+  .dot.lp, .empty.lp { align-self: center; font-size: 0; }
+  .dot.lp svg { display: block; width: 1rem; height: 1rem; }
+  .empty.lp svg { display: block; width: 1.15rem; height: 1.15rem; }
+  .compact .dot.lp { width: auto; height: auto; background: none; border-radius: 0; }
+  .dim { filter: brightness(0.4); }
 </style>
 </head>
 <body>
@@ -27,29 +33,46 @@
 import * as wails from "/wails/runtime.js";
 
 const colors = { working: [255, 215, 0], done: [50, 205, 50], monitoring: [0, 191, 255] };
-// blinking alternates the state color with a 40% version of it
-const rgb = (state, dim) => `rgb(${(colors[state] || [255, 0, 0]).map(v => Math.round(v * (dim ? 0.4 : 1)))})`;
+const rgb = state => `rgb(${colors[state] || [255, 0, 0]})`;
+// a darker yellow under the lollipop's white spiral, which would barely show on the plain one
+const headColor = state => state === "working" ? "rgb(230,176,0)" : rgb(state);
 const list = document.getElementById("list"), bar = document.getElementById("bar");
-let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer, lang = "en";
+let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer, lang = "en", lollipop = false;
 const text = (en, it) => lang === "it" ? it : en;
 
 function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
+
+// Head of radius 10 in the current color with a white Archimedean spiral of 2 turns (same idea as the tray icon).
+const lollipopSVG = (() => {
+  const stroke = 1.7, end = 4 * Math.PI, b = (10 - 0.9 - stroke / 2) / end, pts = [];
+  for (let phi = 0; phi <= end + 1e-9; phi += 0.15) {
+    pts.push(`${(10 + b * phi * Math.cos(phi)).toFixed(2)},${(10 + b * phi * Math.sin(phi)).toFixed(2)}`);
+  }
+  return `<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="currentColor"/><polyline points="${pts.join(" ")}" ` +
+    `fill="none" stroke="#fff" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+})();
+
+function marker(cls, color) {
+  const m = span(cls + (lollipop ? " lp" : ""), lollipop ? "" : "●");
+  if (lollipop) m.innerHTML = lollipopSVG;
+  m.style.color = color;
+  return m;
+}
 
 function render(msg) {
   const { items, error } = last = msg;
   list.replaceChildren();
   dots = [];
   if (!items.length) {
-    const d = span("empty", "●");
-    d.style.color = error ? "rgb(255,0,0)" : "dimgray";
+    const d = marker("empty", error ? "rgb(255,0,0)" : "dimgray");
     d.title = error ? text("Error: ", "Errore: ") + error : text("No active agents", "Nessun agente attivo");
     list.append(d);
   }
   for (const it of items) {
     const a = span("a" + (it.key === pressedKey ? " pressed" : ""), "");
-    const dot = span("dot", "●"), name = span("name", it.label);
+    const dot = marker("dot", lollipop ? headColor(it.state) : rgb(it.state)), name = span("name", it.label);
     a.title = it.tip;
-    a.style.color = dot.style.color = rgb(it.state);
+    a.style.color = rgb(it.state);
     a.onclick = () => click(it, a);
     a.append(dot, name);
     list.append(a);
@@ -73,11 +96,13 @@ function applySettings(s) {
   lang = s.uiLang;
   document.body.classList.toggle("pill", s.shape === "pill");
   document.body.classList.toggle("compact", s.compact);
+  lollipop = s.marker === "lollipop";
   document.documentElement.style.setProperty("--scale", s.scale / 100);
   clearInterval(blinkTimer);
+  // blinking alternates the marker with a 40% version of it (spiral included)
   blinkTimer = setInterval(() => {
     phase = !phase;
-    for (const { it, dot } of dots) dot.style.color = rgb(it.state, phase && it.blink);
+    for (const { it, dot } of dots) dot.classList.toggle("dim", phase && it.blink);
   }, s.blinkMs);
   render(last); // re-render to report the new size
 }

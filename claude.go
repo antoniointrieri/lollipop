@@ -217,11 +217,7 @@ func claudeConfigDir() string {
 func claudeSettingsPath() string { return filepath.Join(claudeConfigDir(), "settings.json") }
 
 func hookCommand() string {
-	exe, _ := os.Executable()
-	if r, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = r
-	}
-	p := filepath.ToSlash(exe)
+	p := filepath.ToSlash(exePath())
 	if strings.Contains(p, " ") {
 		p = `"` + p + `"`
 	}

@@ -37,7 +37,8 @@ Il nome viene dal *lollipop man* inglese, il vigile con la paletta tonda che dic
   Claude Code, la finestra che ospita la sessione, che lollipop trova da solo. Vedi
   [Sessioni Claude Code](#sessioni-claude-code).
 - **Icona nella traybar** nel colore dell'agente più urgente, con un riepilogo nel tooltip
-  (`lollipop — 1 in attesa, 1 done, 2 working`). Puoi anche nascondere la finestra e tenere solo l'icona.
+  (`lollipop — 1 in attesa, 1 done, 2 working`). Senza agenti la finestra sparisce e resta solo l'icona; puoi
+  anche nascondere la finestra del tutto e tenere solo l'icona.
 - **Si adatta**: cresce verso sinistra tenendo fermo il bordo destro, resta sopra la taskbar, funziona su più
   monitor e al riavvio si ricorda dove l'avevi lasciata.
 
@@ -94,8 +95,8 @@ go build -ldflags "-H=windowsgui" -o lollipop.exe .   # Windows
 go build -o lollipop .                               # macOS (servono gli Xcode Command Line Tools)
 ```
 
-Avvia `lollipop.exe`: la finestra compare in alto a destra. Per farlo partire con Windows, metti un collegamento
-a `lollipop.exe` in `shell:startup` (Win+R → `shell:startup`); su macOS aggiungilo agli *Elementi di login*.
+Avvia `lollipop.exe`: la finestra compare in alto a destra. Per farlo partire all'accesso, spunta **Avvia
+all'accesso** nel menu.
 
 ## Uso
 
@@ -104,15 +105,17 @@ a `lollipop.exe` in `shell:startup` (Win+R → `shell:startup`); su macOS aggiun
 | Clic su una voce | porta davanti l'agente (Orca sul suo terminale, oppure la finestra di Claude Code) |
 | Trascina la maniglia `⋮` | sposta la finestra |
 | Tasto destro (sulla finestra o sull'icona) | menu delle impostazioni ed **Esci** |
-| Clic sull'icona nella traybar | mostra la finestra e la porta davanti |
+| Clic sull'icona nella traybar | mostra la finestra (se ci sono agenti) e la porta davanti |
 
 Impostazioni disponibili dal menu (hanno effetto subito e vengono salvate):
 
 - **Forma**: rettangolo o capsula
+- **Indicatore**: pallino o lollipop (la testa dell'icona, con la spirale bianca)
 - **Lampeggio**: lento, normale o veloce
 - **Dimensione**: piccola, normale o grande
 - **Compatta**: solo i pallini, con il nome nel tooltip
 - **Sempre in primo piano** e **Mostra finestra**
+- **Avvia all'accesso**: una voce `Run` utente nel registro su Windows, un LaunchAgent su macOS
 - **Claude Code**: stato dell'integrazione, **Installa** (poi **Ripara**), **Rimuovi integrazione**
 - **Language / Lingua**: automatica (lingua del sistema operativo), English o Italiano
 

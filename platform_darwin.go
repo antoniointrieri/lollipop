@@ -48,7 +48,12 @@ static int regularApp(int pid, char *name, int size) {
 import "C"
 
 import (
+	"encoding/xml"
+	"errors"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -105,4 +110,50 @@ func osLanguage() string {
 		return "it"
 	}
 	return "en"
+}
+
+const launchAgentLabel = "io.github.antoniointrieri.lollipop"
+
+// launchd loads the user's LaunchAgents at login: no launchctl needed. Without KeepAlive, Quit stays quit.
+func launchAgentPath() string {
+	h, _ := os.UserHomeDir()
+	return filepath.Join(h, "Library", "LaunchAgents", launchAgentLabel+".plist")
+}
+
+func launchAgent() string {
+	var exe strings.Builder
+	_ = xml.EscapeText(&exe, []byte(exePath()))
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>` + launchAgentLabel + `</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>` + exe.String() + `</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>
+`
+}
+
+// ponytail: an agent disabled in System Settings > Login Items still counts as on
+func autostartState() (on, current bool) {
+	raw, err := os.ReadFile(launchAgentPath())
+	return err == nil, string(raw) == launchAgent()
+}
+
+func setAutostart(on bool) error {
+	if !on {
+		if err := os.Remove(launchAgentPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	return writeAtomic(launchAgentPath(), []byte(launchAgent()))
 }

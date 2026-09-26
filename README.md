@@ -37,7 +37,8 @@ when it's their turn.
 - **Click an entry** to bring the agent to the front: Orca right on that agent's terminal, or the window hosting
   the Claude Code session, which lollipop finds by itself. See [Claude Code sessions](#claude-code-sessions).
 - **Tray icon** in the color of the most urgent agent, with a summary in its tooltip
-  (`lollipop — 1 waiting, 1 done, 2 working`). You can hide the window and keep only the icon.
+  (`lollipop — 1 waiting, 1 done, 2 working`). With no agents the window disappears and only the icon stays; you
+  can also hide the window for good and keep only the icon.
 - **Stays out of the way**: grows to the left keeping its right edge fixed, stays above the taskbar, works across
   multiple monitors and remembers where you left it.
 
@@ -96,8 +97,7 @@ go build -ldflags "-H=windowsgui" -o lollipop.exe .   # Windows
 go build -o lollipop .                               # macOS (needs the Xcode Command Line Tools)
 ```
 
-To start it with Windows, put a shortcut to `lollipop.exe` in `shell:startup` (Win+R → `shell:startup`); on macOS
-add it to *Login Items*.
+To start it at login, tick **Start at login** in the menu.
 
 ## Usage
 
@@ -106,15 +106,17 @@ add it to *Login Items*.
 | Click an entry | brings the agent to the front (Orca on its terminal, or the Claude Code window) |
 | Drag the `⋮` handle | moves the window |
 | Right-click (window or tray icon) | settings menu and **Quit** |
-| Click the tray icon | shows the window and brings it to the front |
+| Click the tray icon | shows the window (when there are agents) and brings it to the front |
 
 Settings, available from the menu, apply immediately and are saved:
 
 - **Shape**: rectangle or pill
+- **Indicator**: dot or lollipop (the tray icon's head with its white spiral)
 - **Blinking**: slow, normal or fast
 - **Size**: small, normal or large
 - **Compact**: dots only, with the name in the tooltip
 - **Always on top** and **Show window**
+- **Start at login**: a per-user `Run` registry entry on Windows, a LaunchAgent on macOS
 - **Claude Code**: integration status, **Install** (then **Repair**), **Remove integration**
 - **Language / Lingua**: automatic (OS language), English or Italiano
 

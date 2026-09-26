@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -52,7 +53,7 @@ func main() {
 		},
 		Windows: application.WindowsOptions{DisableQuitOnLastWindowClosed: true},
 	})
-	u := &ui{app: app, s: s}
+	u := &ui{app: app, s: s, idle: true} // hidden until the first poll finds an agent
 	u.win = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "lollipop",
 		Width: 60, Height: 36, // replaced by the "size" event from the frontend
@@ -69,6 +70,7 @@ func main() {
 	u.buildMenus()
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		go u.claudeStartup()
+		go u.autostartStartup()
 	})
 
 	tr := newTracker()
@@ -171,4 +173,13 @@ func printOnce(orca *orcaClient) {
 	}
 	fmt.Println(tr("Focused:", "Pannello attivo:"), s.Focused, tr(" Orca in front:", " Orca in primo piano:"), orcaInFront(orca.orcaPID()))
 	fmt.Println(tr("Claude Code integration:", "Integrazione Claude Code:"), claudeHooksStatus().label())
+}
+
+// exePath is the running executable with symlinks resolved: what the Claude Code hook and the login entry launch.
+func exePath() string {
+	exe, _ := os.Executable()
+	if r, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = r
+	}
+	return exe
 }

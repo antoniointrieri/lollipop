@@ -22,6 +22,7 @@ type settings struct {
 	Lang           string    `json:"lang"`          // "auto" | "en" | "it"
 	Pos            *position `json:"pos,omitempty"` // right and top edge: the window grows to the left
 	Shape          string    `json:"shape"`         // "rect" | "pill"
+	Marker         string    `json:"marker"`        // "dot" | "lollipop"
 	BlinkMs        int       `json:"blinkMs"`
 	Scale          int       `json:"scale"` // percent
 	Compact        bool      `json:"compact"`
@@ -36,7 +37,7 @@ func settingsFile() string {
 }
 
 func loadSettings() settings {
-	s := settings{Lang: "auto", Shape: "rect", BlinkMs: 500, Scale: 100, AlwaysOnTop: true, ShowWindow: true}
+	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, AlwaysOnTop: true, ShowWindow: true}
 	if raw, err := os.ReadFile(settingsFile()); err == nil {
 		_ = json.Unmarshal(raw, &s)
 	}
@@ -51,11 +52,16 @@ type ui struct {
 	mu       sync.Mutex
 	s        settings
 	placed   bool
+	idle     bool // no agents and no error: nothing to show, only the tray icon stays
 	trayLast string
 
-	checks      []check // checkable items of every menu, re-synced on each change
-	menus       []*application.Menu
-	claudeItems []claudeItems
+	visMu sync.Mutex // serializes Show/Hide; never taken on the UI thread
+	shown bool
+
+	checks         []check // checkable items of every menu, re-synced on each change
+	menus          []*application.Menu
+	claudeItems    []claudeItems
+	autostartItems []*application.MenuItem // checked from the OS state, not from settings
 }
 
 type check struct {
@@ -103,12 +109,13 @@ func toggle(u *ui, m *application.Menu, label string, field func(*settings) *boo
 // buildMenus (re)creates the window and tray menus, e.g. after a language change.
 // They are separate objects: no shared native handles.
 func (u *ui) buildMenus() {
-	u.checks, u.menus, u.claudeItems = nil, nil, nil
+	u.checks, u.menus, u.claudeItems, u.autostartItems = nil, nil, nil, nil
 	ctx := u.app.ContextMenu.New()
 	u.buildMenu(ctx.Menu)
 	u.app.ContextMenu.Add("main", ctx)
 	u.tray.SetMenu(u.buildMenu(application.NewMenu()))
 	u.refreshClaudeStatus()
+	u.refreshAutostart()
 }
 
 func (u *ui) buildMenu(m *application.Menu) *application.Menu {
@@ -116,6 +123,11 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 	sub := m.AddSubmenu(tr("Shape", "Forma"))
 	radio(u, sub, tr("Rectangle", "Rettangolo"), shape, "rect")
 	radio(u, sub, tr("Pill", "Capsula"), shape, "pill")
+
+	mark := func(s *settings) *string { return &s.Marker }
+	sub = m.AddSubmenu(tr("Indicator", "Indicatore"))
+	radio(u, sub, tr("Dot", "Pallino"), mark, "dot")
+	radio(u, sub, "Lollipop", mark, "lollipop")
 
 	blink := func(s *settings) *int { return &s.BlinkMs }
 	sub = m.AddSubmenu(tr("Blinking", "Lampeggio"))
@@ -133,6 +145,8 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 	m.AddSeparator()
 	toggle(u, m, tr("Always on top", "Sempre in primo piano"), func(s *settings) *bool { return &s.AlwaysOnTop })
 	toggle(u, m, tr("Show window", "Mostra finestra"), func(s *settings) *bool { return &s.ShowWindow })
+	u.autostartItems = append(u.autostartItems, m.AddCheckbox(tr("Start at login", "Avvia all'accesso"), false).
+		OnClick(func(*application.Context) { u.toggleAutostart() }))
 	m.AddSeparator()
 	sub = m.AddSubmenu("Claude Code")
 	ci := claudeItems{status: sub.Add("").SetEnabled(false)}
@@ -166,7 +180,7 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 func (u *ui) change(set func(*settings)) {
 	u.mu.Lock()
 	set(&u.s)
-	s, placed := u.s, u.placed
+	s := u.s
 	u.mu.Unlock()
 	if l := resolveLang(s.Lang); l != uiLang.Load() {
 		uiLang.Store(l)
@@ -179,21 +193,44 @@ func (u *ui) change(set func(*settings)) {
 			m.Update()
 		}
 	}
-	u.apply(s, placed)
+	u.apply(s)
 	u.save()
 }
 
 // apply handles window-level settings; the frontend applies the visual ones.
-func (u *ui) apply(s settings, placed bool) {
+func (u *ui) apply(s settings) {
 	u.win.SetAlwaysOnTop(s.AlwaysOnTop)
-	if placed {
-		if s.ShowWindow {
-			u.win.Show()
-		} else {
-			u.win.Hide()
-		}
-	}
+	u.syncVisible()
 	u.emitSettings(s)
+}
+
+// syncVisible shows the window when "Show window" is on, it has been placed and there is something to show.
+func (u *ui) syncVisible() {
+	u.visMu.Lock()
+	defer u.visMu.Unlock()
+	u.mu.Lock()
+	want := u.s.ShowWindow && u.placed && !u.idle
+	u.mu.Unlock()
+	if want == u.shown {
+		return
+	}
+	u.shown = want
+	if want {
+		u.win.Show()
+	} else {
+		u.win.Hide()
+	}
+}
+
+// setIdle hides the window right away when the last agent goes; showing it waits for the frontend to report
+// the new size (place), so the window never appears with the old content.
+func (u *ui) setIdle(idle bool) {
+	u.mu.Lock()
+	u.idle = idle
+	u.mu.Unlock()
+	if idle {
+		u.syncVisible()
+	}
 }
 
 // emitSettings sends the settings to the frontend together with the resolved UI language.
@@ -250,9 +287,7 @@ func (u *ui) place(w, h int) {
 	u.mu.Lock()
 	u.placed = true
 	u.mu.Unlock()
-	if first && s.ShowWindow {
-		u.win.Show()
-	}
+	u.syncVisible()
 }
 
 func (u *ui) isPlaced() bool {
@@ -265,7 +300,7 @@ func (u *ui) setupTray() {
 	u.tray = u.app.SystemTray.New()
 	trayIcons = map[string][]byte{}
 	for name, c := range map[string]color.RGBA{"red": {255, 0, 0, 255}, "green": {50, 205, 50, 255},
-		"blue": {0, 191, 255, 255}, "yellow": {255, 215, 0, 255}, "gray": {105, 105, 105, 255}} {
+		"blue": {0, 191, 255, 255}, "yellow": {230, 176, 0, 255}, "gray": {105, 105, 105, 255}} {
 		trayIcons[name] = lollipopPNG(c)
 	}
 	u.tray.SetIcon(trayIcons["gray"])
@@ -273,12 +308,18 @@ func (u *ui) setupTray() {
 	u.tray.OnClick(func() {
 		go func() { // the handler runs on the UI thread
 			u.change(func(s *settings) { s.ShowWindow = true })
-			u.win.Focus()
+			u.visMu.Lock()
+			shown := u.shown // with no agents the window stays hidden
+			u.visMu.Unlock()
+			if shown {
+				u.win.Focus()
+			}
 		}()
 	})
 }
 
 func (u *ui) updateTray(items []item, errMsg string) {
+	u.setIdle(len(items) == 0 && errMsg == "")
 	c, tip := summary(items, errMsg)
 	u.mu.Lock()
 	changed := c+tip != u.trayLast
@@ -412,4 +453,31 @@ func (u *ui) claudeStartup() {
 	})
 	no.OnClick(func() { u.change(func(s *settings) { s.ClaudePrompted = true }) })
 	d.SetDefaultButton(yes).SetCancelButton(no).Show()
+}
+
+// refreshAutostart checks the "Start at login" items when the OS entry exists.
+func (u *ui) refreshAutostart() {
+	on, _ := autostartState()
+	for _, it := range u.autostartItems {
+		it.SetChecked(on)
+	}
+	for _, m := range u.menus {
+		m.Update()
+	}
+}
+
+func (u *ui) toggleAutostart() {
+	on, _ := autostartState()
+	if err := setAutostart(!on); err != nil {
+		u.app.Dialog.Error().SetTitle("lollipop").SetMessage(err.Error()).Show()
+	}
+	u.refreshAutostart()
+}
+
+// autostartStartup points an existing entry to this exe, e.g. after it was moved.
+func (u *ui) autostartStartup() {
+	if on, current := autostartState(); on && !current {
+		_ = setAutostart(true)
+	}
+	u.refreshAutostart()
 }

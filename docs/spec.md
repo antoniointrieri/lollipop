@@ -10,7 +10,7 @@
 | Piattaforme | Windows (verificato) + macOS (**best effort alla cieca**: scritto, mai compilato né provato finché non c'è un Mac) |
 | UI | **Wails v3**, versione fissata a `v3.0.0-beta.25`. Frontend HTML/JS statico incorporato con `embed`: niente npm, niente CLI `wails3`, niente generazione di binding |
 | Distribuzione | Solo uso personale: `go build` locale, niente installer, firma o CI |
-| Extra | Solo **memoria della posizione**. Avvio automatico e suono: no |
+| Extra | Solo **memoria della posizione**. Suono: no. Avvio automatico: aggiunto nella v0.3 (§11) |
 | Split di Orca | Parità col POC: si legge solo il gruppo radice del layout |
 | Host remoti | Solo terminali locali (come il POC) |
 
@@ -329,3 +329,59 @@ installer, altri strumenti come Codex o Gemini.
   `tr("English", "Italiano")`, che restituisce la versione della lingua attiva. Il frontend riceve la lingua con
   l'evento `settings` e ha i suoi due testi ("Nessun agente attivo", "Errore").
 - **README**: la nota "The UI is in Italian" diventa "English and Italian, following the OS language".
+
+## 11. v0.3 — avvio automatico e finestra solo con agenti
+
+> Stato: **approvata** (2026-09-26).
+
+### Finestra solo con agenti
+
+- Senza agenti la finestra sparisce e resta solo l'icona nella traybar (grigia, tooltip `nessun agente attivo`).
+  Ricompare quando arriva il primo agente.
+- Con un errore di protocollo di Orca la finestra resta visibile col pallino rosso, anche senza agenti.
+- La finestra è visibile quando valgono tutte e tre: **Mostra finestra** attivo, finestra già posizionata, almeno un
+  agente (o un errore). **Mostra finestra** resta la preferenza dell'utente e non viene toccata.
+- All'avvio la finestra resta nascosta finché il primo poll non trova un agente, così non lampeggia vuota.
+- Nascondere è immediato (al poll). Mostrare aspetta che il frontend comunichi la nuova dimensione (evento `size`),
+  così la finestra non compare con il contenuto vecchio.
+- Il clic sull'icona riattiva **Mostra finestra** come prima; senza agenti la finestra resta nascosta e non prende
+  il focus.
+
+### Avvio automatico
+
+- Nuova voce di menu **Avvia all'accesso** (casella), sotto **Mostra finestra**. Lo stato si legge dal sistema
+  operativo a ogni costruzione del menu e dopo ogni clic: non sta in `settings.json`, così resta giusto anche se
+  l'utente toglie la voce da fuori.
+- **Windows**: valore `lollipop` in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, con il percorso dell'exe
+  tra virgolette. Gestione attività può disattivarlo senza toglierlo: lo segna in
+  `...\Explorer\StartupApproved\Run` con un primo byte dispari (`02` attivo, `03` disattivato, verificato sul
+  registro). In quel caso la casella risulta spenta, e attivandola lollipop cancella quel segno, che altrimenti
+  prevarrebbe sulla nuova voce.
+- **macOS** (non verificato): LaunchAgent `~/Library/LaunchAgents/io.github.antoniointrieri.lollipop.plist` con
+  `RunAtLoad` e senza `KeepAlive`, così **Esci** resta definitivo. launchd lo carica al login successivo: niente
+  `launchctl bootstrap`, che con `RunAtLoad` avvierebbe subito una seconda istanza. Un agente disattivato da
+  Impostazioni di Sistema > Elementi di login risulta comunque attivo.
+- **Exe spostato**: all'avvio, se la voce esiste ma punta a un altro percorso, viene riscritta in silenzio, come
+  l'hook di Claude Code.
+- **Perché non l'API `Autostart` di Wails**: su Windows ignora la disattivazione da Gestione attività e riconosce
+  la voce solo se punta all'exe corrente, quindi non si accorge di un exe spostato; su macOS fa
+  `launchctl bootstrap` appena attivata.
+
+## 12. v0.3 — indicatore a lollipop
+
+> Stato: **approvata** (2026-09-26).
+
+- Nuovo sottomenu **Indicatore ▸ ◉ Pallino · Lollipop**, sotto **Forma**. Si salva in `settings.json`
+  (`marker`: `dot` | `lollipop`, predefinito `dot`).
+- **Lollipop**: al posto del pallino, la testa del lollipop dell'icona senza bastoncino. Cerchio nel colore dello
+  stato con una spirale di Archimede bianca di 2 giri, tratto 1,7 su un diametro di 20. La spirale dell'icona
+  (3 giri circa) a 8-15 px diventerebbe una macchia; con 1,5 giri e tratto più spesso il bianco copre troppo il
+  colore.
+- Disegnato in SVG nel frontend (generato in JS all'avvio), con la testa in `currentColor`: si adatta alla
+  dimensione e ai colori senza file di asset.
+- **Giallo più scuro** per la testa del lollipop e per l'icona nella traybar (`rgb(230,176,0)` invece di
+  `rgb(255,215,0)`): sul giallo pieno la spirale bianca quasi non si vede. Il testo della voce e il pallino restano
+  del giallo normale.
+- **Misure**: testa di 1rem in vista normale e compatta, 1,15rem per il segno di "nessun agente" / errore.
+- **Lampeggio**: la fase spenta applica `filter: brightness(0.4)` all'indicatore, così si abbassano insieme testa
+  e spirale. Anche il pallino ora lampeggia così, con lo stesso risultato di prima (colore al 40%).
