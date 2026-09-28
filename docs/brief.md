@@ -1,7 +1,6 @@
 # lollipop — brief di partenza
 
-> Documento di passaggio consegne scritto dall'agente che ha costruito il proof of concept.
-> L'utente parla italiano. Questo brief NON è una specifica approvata: è il punto di partenza per il design.
+> Punto di partenza del design, scritto a partire dal proof of concept. La specifica approvata è `docs/spec.md`.
 
 ## Cos'è
 
@@ -14,12 +13,8 @@ Il nome viene dal "lollipop man" inglese: il vigile con la paletta tonda che dic
 
 ## Proof of concept esistente (riferimento funzionale)
 
-`orca-semaforo.ps1` — PowerShell + WinForms, funzionante su Windows, usato quotidianamente
-dall'utente. **Leggilo per intero prima di progettare**: ogni riga codifica una decisione presa con l'utente.
-Si lancia con `Semaforo Orca.lnk` (`conhost.exe --headless powershell.exe -File ...`),
-debug con `powershell -NoProfile -File orca-semaforo.ps1 -Once`.
-
-Il POC resta in uso finché lollipop non lo sostituisce: non modificarlo.
+`orca-semaforo.ps1`: uno script PowerShell + WinForms, funzionante su Windows. Ogni sua riga codifica una
+decisione presa con l'utente.
 
 ## Comportamento concordato con l'utente (parità con il POC)
 
@@ -54,7 +49,7 @@ Il POC resta in uso finché lollipop non lo sostituisce: non modificarlo.
 
 ## Come parlare con Orca (scoperto per reverse engineering — NON documentato)
 
-Orca 1.4.211 su Windows. Tutto quanto segue è stato verificato su questa macchina; su macOS nulla è verificato.
+Orca 1.4.211 su Windows. Tutto quanto segue è stato verificato su Windows; su macOS nulla è verificato.
 
 ### Named pipe locale (usata dal POC)
 
@@ -96,7 +91,7 @@ restano shell/monitor in background (sub-agenti vivi invece danno `working` puro
 
 ## Decisioni già prese con l'utente
 
-- Linguaggio **Go** (installato: go 1.26.4, node 22, npm 10, git; WebView2 presente; niente gcc; CLI Wails da installare).
+- Linguaggio **Go**.
 - Piattaforme della prima versione: **Windows e macOS**.
 - UI: orientamento verso **Wails v2** (finestra frameless + AlwaysOnTop, backend Go). Alternativa discussa e
   non scelta: icona nella system tray (`fyne.io/systray`), più semplice ma senza colpo d'occhio su tutti gli agenti.
@@ -108,8 +103,7 @@ restano shell/monitor in background (sub-agenti vivi invece danno `working` puro
 
 - **macOS**: trasporto verso il runtime (probabilmente socket Unix — leggere `orca-runtime.json` su macOS),
   percorso della cartella dati di Orca, rilevamento dell'app in primo piano (NSWorkspace) e attivazione di Orca.
-  L'utente non ha ancora detto se ha un Mac per i test: chiederlo.
-- Distribuzione: solo uso personale o anche per il team? (installer, firma, avvio automatico)
+- Distribuzione: installer, firma, avvio automatico.
 - Extra proposti e mai richiesti: memoria della posizione, avvio automatico, suono alla fine.
 - `orca terminal list` include anche terminali di host remoti? Per ora solo host `local`.
 
@@ -121,9 +115,3 @@ restano shell/monitor in background (sub-agenti vivi invece danno `working` puro
   processi in background appesi (falsano proprio lo stato che questa app mostra).
 - Cercare stringhe in `%LOCALAPPDATA%\Programs\orca\resources\app.asar` (≈120 MB): usare ricerche a stringa fissa
   (`grep -aobF`), le regex con `.{0,N}` durano minuti.
-
-## Come procedere
-
-Il design è a metà: è stata fatta solo la prima domanda (piattaforme → Windows + macOS).
-Prosegui con il processo di brainstorming → spec scritta → approvazione dell'utente → piano → implementazione.
-Non scrivere codice di prodotto prima che l'utente abbia approvato la spec.
