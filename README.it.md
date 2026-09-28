@@ -181,25 +181,7 @@ La UI è fatta con [Wails v3](https://github.com/wailsapp/wails): backend Go e u
 
 ## Sviluppo
 
-```
-main.go               avvio, loop di polling, eventi tra Go e frontend
-orca.go               client del runtime di Orca
-claude.go             sessioni Claude Code pure: hook, file di sessione, installazione in settings.json
-state.go              voci, lampeggio, riepilogo per la traybar (logica pura, testata)
-ui.go                 impostazioni, menu, traybar, posizione, disegno dell'icona
-platform_*.go         codice specifico di Windows e macOS
-frontend/index.html   la finestra (HTML/CSS/JS, senza build)
-docs/spec.md          specifica: comportamento e decisioni
-```
-
-- Test: `go test ./...`
-- Le novità significative vanno in [CHANGELOG.md](CHANGELOG.md), in inglese: la sezione di una versione diventa il testo
-  della sua Release.
-- La CI (`.github/workflows/build.yml`) testa e compila Windows e macOS a ogni push; un tag `v*` pubblica anche
-  una GitHub Release con i due binari e la loro attestazione di provenienza.
-- L'icona dell'exe (`lollipop.ico`, `rsrc_windows_amd64.syso`) è disegnata dal codice in `ui.go`. Se cambi il
-  disegno, rigenerala con `go generate`. Lo stesso `.syso` contiene il manifest e le informazioni di versione, che
-  la CI rigenera dal tag git a ogni build.
+Vedi [CONTRIBUTING.md](CONTRIBUTING.md) (in inglese).
 
 ## Licenza
 
