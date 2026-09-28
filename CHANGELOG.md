@@ -20,7 +20,8 @@ text of its GitHub Release.
 
 ### Fixed
 
-- A crash at startup (`concurrent map writes`) when the Claude Code and login checks updated the menus together.
+- A crash at startup when the Claude Code and login checks updated the menus together: `concurrent map writes` on
+  Windows, a segmentation fault on macOS, often on every start after the first. Menu changes are now serialized.
 - The right edge of the window crept a few pixels to the right at every resize.
 
 ## [0.3.0] - 2026-09-28

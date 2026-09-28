@@ -63,7 +63,9 @@ type ui struct {
 	idle     bool // no agents and no error: nothing to show, only the tray icon stays
 	trayLast string
 
-	visMu sync.Mutex // serializes Show/Hide; never taken on the UI thread
+	visMu  sync.Mutex // serializes Show/Hide; never taken on the UI thread
+	menuMu sync.Mutex // serializes menu changes: an Update frees the native items another change may be touching
+	//                   (a macOS crash in v0.3.0); never taken on the UI thread
 	shown bool
 
 	checks      []check // checkable items of every menu, re-synced on each change
@@ -178,6 +180,7 @@ func (u *ui) change(set func(*settings)) {
 	set(&u.s)
 	s := u.s
 	u.mu.Unlock()
+	u.menuMu.Lock()
 	if l := resolveLang(s.Lang); l != uiLang.Load() {
 		uiLang.Store(l)
 		u.buildMenus()
@@ -195,6 +198,7 @@ func (u *ui) change(set func(*settings)) {
 			m.Update()
 		}
 	}
+	u.menuMu.Unlock()
 	u.apply(s)
 	u.save()
 }
@@ -489,10 +493,12 @@ func (u *ui) claudeStartup() {
 	}
 	yes, no := d.AddButton(yesLabel), d.AddButton(noLabel)
 	yes.OnClick(func() {
-		u.change(func(s *settings) { s.ClaudePrompted = true })
-		u.claudeAction(installClaudeHooks, tr("Claude Code integration installed.", "Integrazione con Claude Code installata."))
+		go func() { // off the UI thread, like every change
+			u.change(func(s *settings) { s.ClaudePrompted = true })
+			u.claudeAction(installClaudeHooks, tr("Claude Code integration installed.", "Integrazione con Claude Code installata."))
+		}()
 	})
-	no.OnClick(func() { u.change(func(s *settings) { s.ClaudePrompted = true }) })
+	no.OnClick(func() { go u.change(func(s *settings) { s.ClaudePrompted = true }) })
 	d.SetDefaultButton(yes).SetCancelButton(no).Show()
 }
 
