@@ -110,6 +110,10 @@ func main() {
 		mu.Unlock()
 		if a.Host != nil {
 			activateHost(*a.Host)
+			if link := sessionLink(*a.Host); link != "" {
+				time.Sleep(150 * time.Millisecond) // lets VS Code register which of its windows is focused
+				_ = app.Browser.OpenURL(link)
+			}
 			return
 		}
 		activateOrca(orca.orcaPID())
@@ -213,7 +217,11 @@ func printOnce(orca *orcaClient) {
 		fmt.Println(tr("Error:", "Errore:"), err)
 	}
 	for _, a := range s.Agents {
-		fmt.Printf("%-10s %-30s %-40s %s\n", a.State, a.Label, a.Title, strings.TrimSpace(a.Handle))
+		where := strings.TrimSpace(a.Handle)
+		if a.Host != nil {
+			where = sessionLink(*a.Host)
+		}
+		fmt.Printf("%-10s %-30s %-40s %s\n", a.State, a.Label, a.Title, where)
 	}
 	fmt.Println(tr("Focused:", "Pannello attivo:"), s.Focused, tr(" Orca in front:", " Orca in primo piano:"), orcaInFront(orca.orcaPID()))
 	fmt.Println(tr("Claude Code integration:", "Integrazione Claude Code:"), claudeHooksStatus().label())

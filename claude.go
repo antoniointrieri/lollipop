@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -38,6 +39,10 @@ type hostRef struct {
 	HWND   uintptr // exact window when known (consoles), else 0: pick among PID's windows
 	Name   string  // executable name, e.g. "WindowsTerminal"
 	Folder string  // session folder, to pick the right IDE window
+	// CLAUDE_CODE_ENTRYPOINT: "cli" in a terminal, "claude-vscode" in the VS Code extension, "claude-desktop" in
+	// the Claude app
+	Entrypoint string
+	Session    string `json:"-"` // Claude Code session id, set by loadClaudeSessions
 }
 
 var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,100}$`)
@@ -117,6 +122,7 @@ func runHook() {
 		s.Title = t
 	}
 	s.Host.Folder = filepath.Base(in.Cwd)
+	s.Host.Entrypoint = os.Getenv("CLAUDE_CODE_ENTRYPOINT")
 	out, _ := json.Marshal(s)
 	_ = writeAtomic(file, out)
 }
@@ -183,6 +189,7 @@ func loadClaudeSessions() []agent {
 			continue
 		}
 		host := s.Host
+		host.Session = id
 		title := "Claude Code in " + hostLabel(host.Name)
 		if s.Title != "" {
 			title = s.Title + "\n" + title
@@ -192,9 +199,52 @@ func loadClaudeSessions() []agent {
 	return agents
 }
 
+// sessionLink returns a link that opens the session's own tab in the app hosting it, "" when there is none
+// (terminals).
+func sessionLink(h hostRef) string {
+	switch h.Entrypoint {
+	case "cli":
+		return ""
+	case "claude-vscode":
+		// opens in the focused VS Code window: activateHost must bring the right one to the front first
+		return "vscode://anthropic.claude-code/open?session=" + url.QueryEscape(h.Session)
+	}
+	// any other entrypoint, or none (recorded by an older lollipop): a session of the Claude app is listed in its files
+	if id := desktopSessionID(h.Session); id != "" {
+		return "claude://code/continue?session=" + id
+	}
+	return ""
+}
+
+var desktopIDRe = regexp.MustCompile(`^local_[A-Za-z0-9-]{1,64}$`)
+
+// desktopSessionID maps a Claude Code session id to the id of the Claude app session running it.
+// ponytail: internal format of the Claude app (<config>/Claude/claude-code-sessions/<account>/<org>/local_*.json);
+// if it changes, the click only brings the app to the front
+func desktopSessionID(cliSession string) string {
+	d, _ := os.UserConfigDir()
+	files, _ := filepath.Glob(filepath.Join(d, "Claude", "claude-code-sessions", "*", "*", "local_*.json"))
+	best, bestAt := "", int64(-1)
+	for _, f := range files {
+		var s struct {
+			SessionID      string `json:"sessionId"`
+			CliSessionID   string `json:"cliSessionId"`
+			LastActivityAt int64  `json:"lastActivityAt"`
+		}
+		if raw, err := os.ReadFile(f); err != nil || json.Unmarshal(raw, &s) != nil {
+			continue
+		}
+		if s.CliSessionID == cliSession && desktopIDRe.MatchString(s.SessionID) && s.LastActivityAt > bestAt {
+			best, bestAt = s.SessionID, s.LastActivityAt
+		}
+	}
+	return best
+}
+
 func hostLabel(exe string) string {
 	names := map[string]string{"WindowsTerminal": "Windows Terminal", "Code": "VS Code", "idea64": "IntelliJ IDEA",
-		"powershell": "PowerShell", "pwsh": "PowerShell", "cmd": tr("Command Prompt", "Prompt dei comandi"), "conhost": "console", "warp": "Warp"}
+		"powershell": "PowerShell", "pwsh": "PowerShell", "cmd": tr("Command Prompt", "Prompt dei comandi"), "conhost": "console", "warp": "Warp",
+		"claude": "Claude"}
 	if n, ok := names[exe]; ok {
 		return n
 	}

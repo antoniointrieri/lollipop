@@ -6,6 +6,12 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- Clicking a Claude Code session of the **VS Code extension** or of the **Claude app** (Code tab) opens its own
+  tab, besides bringing the window to the front. VS Code extension sessions started with an older lollipop get
+  it from their next event.
+
 ## [0.4.0] - 2026-09-28
 
 ### Added

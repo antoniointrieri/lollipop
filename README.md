@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/pill.png" width="614" alt="The lollipop window showing five agents in different states">
+  <img src="docs/img/pill.png" width="637" alt="The lollipop window showing five agents in different states">
 </p>
 
 <p align="center"><a href="README.it.md">Leggi in italiano</a></p>
@@ -22,7 +22,8 @@ when it's their turn.
 ## Features
 
 - **One entry per agent**: every Orca agent with an open terminal and every Claude Code session running on this
-  machine (console, Windows Terminal, Warp, the VS Code or IntelliJ terminal, ...), colored by state:
+  machine (console, Windows Terminal, Warp, the VS Code or IntelliJ terminal, the VS Code extension, the Claude
+  app, ...), colored by state:
 
   | Color | State |
   |---|---|
@@ -135,9 +136,10 @@ The **Integrations** page of the settings shows whether the integration is activ
 it only touches lollipop's own entries; if you delete the exe without removing it, the leftover entries do
 nothing. If you move the exe, lollipop fixes the path on its next start.
 
-Clicking an entry brings the right window to the front, not the exact tab: Windows Terminal and IDEs don't let
-other apps select a tab or a terminal panel. Sessions inside WSL, SSH or containers show their state, but
-clicking them does nothing.
+Clicking an entry brings the right window to the front. Sessions of the VS Code extension and of the Claude app
+(Code tab) also open on their own tab, through the `vscode://anthropic.claude-code/open` and `claude://` links.
+In terminals only the window comes to the front: Windows Terminal and IDEs don't let other apps select a tab or
+a terminal panel. Sessions inside WSL, SSH or containers show their state, but clicking them does nothing.
 
 ### Troubleshooting
 
@@ -180,9 +182,12 @@ binary.
 - **macOS is untested**: `platform_darwin.go` is written from Orca's source and compiles in CI, but it has never
   been run. The Orca data folder (`~/Library/Application Support/orca`) and the socket transport are educated
   guesses. If you have a Mac, run `./lollipop -once` and report what happens.
-- Claude Code sessions: clicking brings the right window to the front, not the exact tab or IDE panel. With
+- Claude Code sessions in a terminal: clicking brings the right window to the front, not the exact tab or IDE panel. With
   several windows of the same terminal, the one with the session folder in its title wins, otherwise the first.
   Sessions inside WSL, SSH or containers show their state, but clicking them does nothing.
+- The Claude app session is found by reading the app's internal session files: an update of the app could break
+  it, and then the click only brings the app to the front. VS Code extension sessions started with an older
+  lollipop open their tab from their next event on.
 - If you split Orca tabs into several side-by-side groups, active-pane detection only looks at the main group.
 - Only local terminals are shown, not those of remote hosts.
 - Wails v3 is still in beta: the version is pinned in `go.mod`.

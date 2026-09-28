@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/pill.png" width="614" alt="La finestra di lollipop con cinque agenti in stati diversi">
+  <img src="docs/img/pill.png" width="637" alt="La finestra di lollipop con cinque agenti in stati diversi">
 </p>
 
 <p align="center"><a href="README.md">Read in English</a></p>
@@ -21,7 +21,8 @@ Il nome viene dal *lollipop man* inglese, il vigile con la paletta tonda che dic
 ## Cosa fa
 
 - **Una voce per agente**: ogni agente di Orca con un terminale aperto e ogni sessione di Claude Code in
-  esecuzione sulla macchina (console, Windows Terminal, Warp, terminale di VS Code o IntelliJ, ...), colorata
+  esecuzione sulla macchina (console, Windows Terminal, Warp, terminale di VS Code o IntelliJ, estensione VS
+  Code, app Claude, ...), colorata
   secondo lo stato:
 
   | Colore | Stato |
@@ -134,9 +135,10 @@ La pagina **Integrazioni** delle impostazioni mostra se l'integrazione è attiva
 rimozione tocca solo le voci di lollipop; se cancelli l'exe senza rimuoverla, le voci rimaste non fanno nulla.
 Se sposti l'exe, lollipop corregge il percorso al successivo avvio.
 
-Il clic porta davanti la finestra giusta, non la scheda esatta: Windows Terminal e gli IDE non permettono ad
-altre app di selezionare una scheda o un pannello del terminale. Per le sessioni in WSL, SSH o container si
-vede lo stato, ma il clic non fa nulla.
+Il clic porta davanti la finestra giusta. Le sessioni dell'estensione VS Code e dell'app Claude (scheda Code) si
+aprono anche sulla loro scheda, tramite i link `vscode://anthropic.claude-code/open` e `claude://`. Nei terminali
+viene davanti solo la finestra: Windows Terminal e gli IDE non permettono ad altre app di selezionare una scheda
+o un pannello del terminale. Per le sessioni in WSL, SSH o container si vede lo stato, ma il clic non fa nulla.
 
 ### Se qualcosa non va
 
@@ -178,9 +180,12 @@ La UI è fatta con [Wails v3](https://github.com/wailsapp/wails): backend Go e u
 - **macOS non provato**: `platform_darwin.go` è scritto sulla base del codice di Orca e compila in CI, ma non è
   mai stato eseguito. La cartella dati di Orca (`~/Library/Application Support/orca`) e il trasporto via socket
   sono ipotesi ragionate. Chi ha un Mac può lanciare `./lollipop -once` e raccontare cosa succede.
-- Sessioni Claude Code: il clic porta davanti la finestra giusta, non la scheda o il pannello esatto dell'IDE.
+- Sessioni Claude Code in un terminale: il clic porta davanti la finestra giusta, non la scheda o il pannello esatto dell'IDE.
   Con più finestre dello stesso terminale vince quella con la cartella della sessione nel titolo, altrimenti la
   prima. Per le sessioni in WSL, SSH o container si vede lo stato, ma il clic non fa nulla.
+- La sessione dell'app Claude si trova leggendo i file interni delle sessioni dell'app: un aggiornamento dell'app
+  potrebbe romperlo, e allora il clic porta davanti solo l'app. Le sessioni dell'estensione VS Code avviate con
+  un lollipop precedente aprono la loro scheda dal loro evento successivo.
 - Se in Orca dividi le schede in più gruppi affiancati, il rilevamento del pannello attivo guarda solo il
   gruppo principale.
 - Mostra solo i terminali locali, non quelli degli host remoti.

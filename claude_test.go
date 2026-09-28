@@ -103,3 +103,39 @@ func TestTranscriptTitle(t *testing.T) {
 		t.Error("missing transcript must give no title")
 	}
 }
+
+func TestSessionLink(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("APPDATA", dir)
+	t.Setenv("HOME", dir)
+	cfg, _ := os.UserConfigDir()
+	sessions := filepath.Join(cfg, "Claude", "claude-code-sessions", "acct", "org")
+	if err := os.MkdirAll(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"local_old.json":   `{"sessionId":"local_old","cliSessionId":"cli-1","lastActivityAt":1}`,
+		"local_new.json":   `{"sessionId":"local_new","cliSessionId":"cli-1","lastActivityAt":2}`,
+		"local_other.json": `{"sessionId":"local_other","cliSessionId":"cli-2","lastActivityAt":3}`,
+		"local_bad.json":   `{"sessionId":"../x","cliSessionId":"cli-3","lastActivityAt":4}`,
+	} {
+		if err := os.WriteFile(filepath.Join(sessions, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range []struct {
+		h    hostRef
+		want string
+	}{
+		{hostRef{Entrypoint: "cli", Session: "cli-1"}, ""},
+		{hostRef{Session: "cli-1"}, "claude://code/continue?session=local_new"}, // entrypoint recorded by an older lollipop
+		{hostRef{Entrypoint: "claude-vscode", Session: "cli-1"}, "vscode://anthropic.claude-code/open?session=cli-1"},
+		{hostRef{Entrypoint: "claude-desktop", Session: "cli-1"}, "claude://code/continue?session=local_new"},
+		{hostRef{Entrypoint: "claude-desktop", Session: "cli-3"}, ""},
+		{hostRef{Entrypoint: "claude-desktop", Session: "cli-9"}, ""},
+	} {
+		if got := sessionLink(c.h); got != c.want {
+			t.Errorf("sessionLink(%+v) = %q, want %q", c.h, got, c.want)
+		}
+	}
+}

@@ -246,9 +246,16 @@ e lo script hook di Orca stessa (`~/.orca/agent-hooks/claude-hook.cmd`).
   | console classica (cmd, PowerShell) | la finestra esatta |
   | Windows Terminal | la finestra giusta, non la scheda |
   | VS Code / Cursor / IntelliJ | la finestra dell'IDE con la cartella nel titolo, non il pannello del terminale |
+  | estensione VS Code | la finestra dell'IDE, poi la scheda della sessione con `vscode://anthropic.claude-code/open?session=<id>` |
+  | app Claude (scheda Code) | l'app, poi la sessione con `claude://code/continue?session=local_<...>` |
   | macOS | l'app ospite (non verificato) |
   | WSL, SSH, container | niente: lo stato si vede, il clic non fa nulla |
 
+- **Estensione VS Code e app Claude**: l'hook salva `CLAUDE_CODE_ENTRYPOINT` (`cli`, `claude-vscode`,
+  `claude-desktop`). Per l'estensione il link usa direttamente il `session_id` dell'hook, e apre la scheda nella
+  finestra di VS Code in primo piano (per questo prima si attiva la finestra). L'app Claude ha id suoi
+  (`local_...`): lollipop li ricava dai file `<UserConfigDir>/Claude/claude-code-sessions/*/*/local_*.json`, che
+  contengono `cliSessionId`. È un formato interno dell'app: se cambia, il clic porta davanti solo l'app.
 - **Sessioni dentro Orca**: l'hook le ignora (variabile `ORCA_PANE_KEY` presente) perché le mostra già Orca.
 
 ### Installazione dell'hook
@@ -306,7 +313,7 @@ e lo script hook di Orca stessa (`~/.orca/agent-hooks/claude-hook.cmd`).
 
 ### Fuori scope
 
-Rispondere ai permessi dal semaforo (come soundpad), selezionare la scheda o il pannello esatto, WSL/SSH/container,
+Rispondere ai permessi dal semaforo (come soundpad), selezionare la scheda o il pannello esatto di un terminale, WSL/SSH/container,
 installer, altri strumenti come Codex o Gemini.
 
 ## 10. v0.2 — lingua dell'interfaccia
