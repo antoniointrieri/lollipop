@@ -34,6 +34,7 @@ type settings struct {
 	DoneMax        int       `json:"doneMax"` // idle entries outside the "⋯"; -1: all
 	AlwaysOnTop    bool      `json:"alwaysOnTop"`
 	ShowWindow     bool      `json:"showWindow"`
+	CheckUpdates   bool      `json:"checkUpdates"`
 	ClaudePrompted bool      `json:"claudePrompted"` // first-run question about the Claude Code hook already asked
 }
 
@@ -43,7 +44,7 @@ func settingsFile() string {
 }
 
 func loadSettings() settings {
-	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, Order: "alpha", Side: "right", DoneMax: -1, AlwaysOnTop: true, ShowWindow: true}
+	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, Order: "alpha", Side: "right", DoneMax: -1, AlwaysOnTop: true, ShowWindow: true, CheckUpdates: true}
 	if raw, err := os.ReadFile(settingsFile()); err == nil {
 		_ = json.Unmarshal(raw, &s)
 	}
@@ -62,6 +63,7 @@ type ui struct {
 	width    int  // as set by place: Bounds reports a few pixels more, and the right edge would creep
 	idle     bool // no agents and no error: nothing to show, only the tray icon stays
 	trayLast string
+	update   [2]string // newer release found: tag and page
 
 	visMu  sync.Mutex // serializes Show/Hide; never taken on the UI thread
 	menuMu sync.Mutex // serializes menu changes: an Update frees the native items another change may be touching
@@ -119,6 +121,13 @@ func (u *ui) buildMenus() {
 
 // buildMenu holds only what is needed often; everything else is in the settings window.
 func (u *ui) buildMenu(m *application.Menu) *application.Menu {
+	u.mu.Lock()
+	up := u.update
+	u.mu.Unlock()
+	if up[0] != "" {
+		m.Add(tr("Update available: ", "Aggiornamento disponibile: ")+up[0]).OnClick(func(*application.Context) { _ = u.app.Browser.OpenURL(up[1]) })
+		m.AddSeparator()
+	}
 	m.Add(tr("Settings…", "Impostazioni…")).OnClick(func(*application.Context) { go u.openSettings() })
 	toggle(u, m, tr("Show window", "Mostra finestra"), func(s *settings) *bool { return &s.ShowWindow })
 	m.AddSeparator()
@@ -132,13 +141,16 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 
 // settingKeys are the settings.json fields the settings window may change.
 var settingKeys = map[string]bool{"lang": true, "shape": true, "marker": true, "blinkMs": true, "scale": true,
-	"compact": true, "order": true, "side": true, "groupByState": true, "doneMax": true, "alwaysOnTop": true, "showWindow": true}
+	"compact": true, "order": true, "side": true, "groupByState": true, "doneMax": true, "alwaysOnTop": true, "showWindow": true, "checkUpdates": true}
 
 // set changes one setting by its JSON name, as sent by the settings window.
 func (u *ui) set(key string, value any) {
 	raw, err := json.Marshal(map[string]any{key: value})
 	if !settingKeys[key] || err != nil {
 		return
+	}
+	if key == "checkUpdates" && value == false {
+		u.setUpdate("", "")
 	}
 	u.change(func(s *settings) {
 		_ = json.Unmarshal(raw, s)
@@ -171,6 +183,21 @@ func (u *ui) openSettings() {
 	}
 	w.Show()
 	w.Focus()
+}
+
+// setUpdate records a newer release ("" to clear it) and shows it in the menu, tray tooltip and settings.
+func (u *ui) setUpdate(tag, url string) {
+	u.mu.Lock()
+	same := u.update == [2]string{tag, url}
+	u.update, u.trayLast = [2]string{tag, url}, "" // trayLast: redo the tooltip on the next poll
+	u.mu.Unlock()
+	if same {
+		return
+	}
+	u.menuMu.Lock()
+	u.buildMenus()
+	u.menuMu.Unlock()
+	u.emitStatus()
 }
 
 func settingsTitle() string { return tr("lollipop settings", "Impostazioni di lollipop") }
@@ -341,6 +368,9 @@ func (u *ui) updateTray(items []item, errMsg string) {
 	u.setIdle(len(items) == 0 && errMsg == "")
 	c, tip := summary(items, errMsg)
 	u.mu.Lock()
+	if tag := u.update[0]; tag != "" {
+		tip += "\n" + tr("Update available: ", "Aggiornamento disponibile: ") + tag
+	}
 	changed := c+tip != u.trayLast
 	u.trayLast = c + tip
 	u.mu.Unlock()
@@ -432,12 +462,18 @@ func (st hooksStatus) code() string {
 func (u *ui) emitStatus() {
 	on, _ := autostartState()
 	light, dark := accentColors()
-	u.app.Event.Emit("status", map[string]any{"claude": claudeHooksStatus().code(), "claudeSettings": claudeSettingsPath(),
+	u.mu.Lock()
+	up := u.update
+	u.mu.Unlock()
+	u.app.Event.Emit("status", map[string]any{"update": up[0], "updateURL": up[1],"claude": claudeHooksStatus().code(), "claudeSettings": claudeSettingsPath(),
 		"autostart": on, "version": appVersion(), "translucent": translucentBackdrop(), "accent": []string{light, dark}})
 }
 
-// appVersion is the tag stamped by go build (v0.4.0), or a pseudo-version for untagged commits.
+// appVersion is the tag of a release build (v0.4.0), else the version stamped by go build (a pseudo-version).
 func appVersion() string {
+	if version != "" {
+		return version
+	}
 	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
 		return bi.Main.Version
 	}

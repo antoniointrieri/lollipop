@@ -466,7 +466,7 @@ torna subito in barra, e un agente nuovo compare a sinistra. Quando il mouse esc
 |---|---|
 | Aspetto | Forma, Indicatore, Dimensione, Velocità del lampeggio, Vista compatta |
 | Voci | Ordine, Voci più importanti (a destra / a sinistra), Raggruppa per stato, Raccogli gli agenti idle + quanti lasciarne visibili (0-99) |
-| Generale | Sempre in primo piano, Mostra finestra, Avvia lollipop all'accesso, Lingua |
+| Generale | Sempre in primo piano, Mostra finestra, Avvia lollipop all'accesso, Cerca aggiornamenti su GitHub, Lingua |
 | Integrazioni | una sezione per agente, per ora solo **Claude Code**: "lollipop aggiunge un hook a `settings.json`" con il percorso cliccabile (lo apre con l'app predefinita, o apre la cartella se il file non c'è), stato, Installa/Ripara, Rimuovi |
 | Informazioni | versione (dal tag stampato da `go build`), licenza, link al repo |
 
@@ -475,3 +475,19 @@ torna subito in barra, e un agente nuovo compare a sinistra. Quando il mouse esc
   chiede lo stato con `settings-ready` e riceve `settings` (come la barra) e `status` (integrazione Claude Code,
   avvio all'accesso, versione, accento, sfondo). Invia `setting` {key, value} per i campi di `settings.json`
   (solo quelli ammessi), `autostart`, `claude` (`install` | `remove`), `open-claude-settings` e `open-repo`.
+
+## 15. v0.4 — avviso di aggiornamento
+
+> Stato: **approvata** (2026-09-28). Solo avviso: niente download né installazione automatici (un exe non firmato
+> che scarica eseguibili e si sostituisce alzerebbe le segnalazioni degli antivirus euristici).
+
+- 10 s dopo l'avvio e poi ogni 24 ore, se **Cerca aggiornamenti su GitHub** è attivo (predefinito), lollipop chiede
+  `GET https://api.github.com/repos/antoniointrieri/lollipop/releases/latest` (anonimo, timeout 15 s; esclude bozze e
+  prerelease) e confronta `tag_name` con la propria versione, entrambe nella forma `vX.Y.Z`.
+- La versione è `main.version`, che la CI imposta con `-ldflags -X` solo sulle build dei tag. Le build locali o fra
+  un tag e l'altro non la hanno (pseudo-versione di `go build`): non controllano.
+- Con una release più recente: voce **Aggiornamento disponibile: vX.Y.Z** in cima al menu (apre la pagina della
+  release), riga in più nel tooltip dell'icona, riga **Aggiornamento disponibile** con il link nella pagina
+  **Informazioni**. Spegnere l'impostazione toglie subito l'avviso.
+- Un errore di rete non mostra nulla: si riprova il giorno dopo.
+- `lollipop -once` stampa anche versione e ultima release.

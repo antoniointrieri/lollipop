@@ -126,6 +126,7 @@ const pages = {
     row(["Always on top", "Sempre in primo piano"], flag("alwaysOnTop")),
     row(["Show window", "Mostra finestra"], flag("showWindow")),
     row(["Start lollipop at login", "Avvia lollipop all'accesso"], check(st.autostart, v => wails.Events.Emit("autostart", v))),
+    row(["Check for updates on GitHub", "Cerca aggiornamenti su GitHub"], flag("checkUpdates")),
     row(["Language / Lingua", "Lingua / Language"],
       select("lang", [["auto", ["Automatic (system)", "Automatica (sistema)"]], ["en", ["English", "English"]], ["it", ["Italiano", "Italiano"]]])),
   ]],
@@ -147,6 +148,8 @@ const pages = {
   }],
   about: [["About", "Informazioni"], () => [
     el("div", { className: "row" }, el("span", { className: "label" }, t(["Version", "Versione"])), el("span", {}, st.version)),
+    st.update ? el("div", { className: "row" }, el("span", { className: "label" }, t(["Update available", "Aggiornamento disponibile"])),
+      el("a", { textContent: t([`Download ${st.update}`, `Scarica la ${st.update}`]), onclick: () => wails.Events.Emit("open-release", st.updateURL) })) : null,
     el("div", { className: "row" }, el("span", { className: "label" }, t(["Source code", "Codice sorgente"])),
       el("a", { textContent: "github.com/antoniointrieri/lollipop", onclick: () => wails.Events.Emit("open-repo") })),
     el("div", { className: "row" }, el("span", { className: "label" }, t(["License", "Licenza"])), el("span", {}, "MIT")),
@@ -167,7 +170,7 @@ function render() {
   nav.replaceChildren(app, ...Object.entries(pages).map(([id, [title]]) =>
     el("button", { className: id === page ? "sel" : "", textContent: t(title), onclick: () => { page = id; render(); } })));
   const [title, body] = pages[page];
-  main.replaceChildren(el("h1", {}, t(title)), ...body());
+  main.replaceChildren(el("h1", {}, t(title)), ...body().filter(Boolean));
 }
 
 wails.Events.On("settings", e => {

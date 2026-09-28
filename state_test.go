@@ -156,3 +156,25 @@ func TestTrackerChanged(t *testing.T) {
 		t.Errorf("seq: %d %d, want 1 2", items[0].seq, items[1].seq)
 	}
 }
+
+func TestNewer(t *testing.T) {
+	for _, c := range []struct {
+		tag, current string
+		want         bool
+	}{
+		{"v0.4.0", "v0.3.0", true},
+		{"v0.3.10", "v0.3.9", true},
+		{"v1.0.0", "v0.9.9", true},
+		{"v0.3.0", "v0.3.0", false},
+		{"v0.2.1", "v0.3.0", false},
+		{"v0.4.0", "dev", false},
+		{"v0.4.0", "v0.3.1-0.20260928103536-837d9cf2c07d+dirty", false},
+		{"v0.4.0-rc1", "v0.3.0", false},
+		{"0.4.0", "v0.3.0", false},
+		{"v0.04.0", "v0.3.0", false},
+	} {
+		if got := newer(c.tag, c.current); got != c.want {
+			t.Errorf("newer(%q, %q) = %v, want %v", c.tag, c.current, got, c.want)
+		}
+	}
+}

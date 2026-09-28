@@ -7,6 +7,7 @@ package main
 //go:generate go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --icon lollipop.ico --manifest gui --product-name lollipop --file-description "lollipop: traffic light for AI coding agents" --original-filename lollipop.exe --copyright "Copyright (c) 2026 lollipop contributors" --product-version=git-tag --file-version=git-tag
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -76,6 +77,7 @@ func main() {
 			u.autostartStartup()
 			u.claudeStartup()
 		}()
+		go u.checkUpdates()
 	})
 
 	tr := newTracker()
@@ -140,6 +142,11 @@ func main() {
 			p = claudeConfigDir() // no settings.json yet: its folder
 		}
 		_ = app.Browser.OpenFile(p)
+	})
+	app.Event.On("open-release", func(e *application.CustomEvent) {
+		if url, _ := e.Data.(string); strings.HasPrefix(url, "https://github.com/antoniointrieri/lollipop/") {
+			_ = app.Browser.OpenURL(url)
+		}
 	})
 	app.Event.On("open-repo", func(*application.CustomEvent) {
 		_ = app.Browser.OpenURL("https://github.com/antoniointrieri/lollipop")
@@ -210,6 +217,16 @@ func printOnce(orca *orcaClient) {
 	}
 	fmt.Println(tr("Focused:", "Pannello attivo:"), s.Focused, tr(" Orca in front:", " Orca in primo piano:"), orcaInFront(orca.orcaPID()))
 	fmt.Println(tr("Claude Code integration:", "Integrazione Claude Code:"), claudeHooksStatus().label())
+	fmt.Print(tr("Version: ", "Versione: "), appVersion())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if tag, _, err := latestRelease(ctx); err == nil {
+		fmt.Print(tr(", latest release: ", ", ultima release: "), tag)
+		if newer(tag, appVersion()) {
+			fmt.Print(tr(" (update available)", " (aggiornamento disponibile)"))
+		}
+	}
+	fmt.Println()
 }
 
 // exePath is the running executable with symlinks resolved: what the Claude Code hook and the login entry launch.

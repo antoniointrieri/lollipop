@@ -115,7 +115,7 @@ immediately and are saved:
 |---|---|
 | Appearance | **Shape** (rectangle or pill), **Indicator** (dot or lollipop head), **Size** and **Blinking speed** (sliders), **Compact view** (dots only, name in the tooltip) |
 | Entries | **Order**: alphabetical or last activity; **Most important entries**: on the right (the edge that stays still) or on the left; **Group by state**: from the most important, waiting, just finished, working, then the finished agents already seen; **Collapse idle agents** (finished and already seen): past the chosen number they go behind a `⋯ N` entry that lists them on mouseover |
-| General | **Always on top**, **Show window**, **Start lollipop at login** (a per-user `Run` registry entry on Windows, a LaunchAgent on macOS), **Language** |
+| General | **Always on top**, **Show window**, **Start lollipop at login** (a per-user `Run` registry entry on Windows, a LaunchAgent on macOS), **Check for updates on GitHub**, **Language** |
 | Integrations | **Claude Code**: the file lollipop adds its hook to (click to open it), status, **Install** (then **Repair**), **Remove** |
 | About | version and link to this repository |
 
@@ -149,7 +149,13 @@ lollipop.exe -once | more     # Windows
 ./lollipop -once              # macOS
 ```
 
-It prints agents, states and the active pane, then exits.
+It prints agents, states, the active pane, the version and the latest release, then exits.
+
+### Updates
+
+Once a day lollipop asks GitHub for the latest release. When a newer one is out, the menu, the tray tooltip and the
+**About** page say so, with a link to the release page: download it from there. Nothing is downloaded or installed
+by itself. Turn it off in **General**; builds made from source never check.
 
 ## How it works
 

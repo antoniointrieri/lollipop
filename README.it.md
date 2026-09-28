@@ -114,7 +114,7 @@ modifiche hanno effetto subito e vengono salvate:
 |---|---|
 | Aspetto | **Forma** (rettangolo o capsula), **Indicatore** (pallino o testa del lollipop), **Dimensione** e **Velocità del lampeggio** (cursori), **Vista compatta** (solo pallini, nome nel tooltip) |
 | Voci | **Ordine**: alfabetico o per ultima attività; **Voci più importanti**: a destra (il bordo che resta fermo) o a sinistra; **Raggruppa per stato**: dal più importante, in attesa, appena finiti, al lavoro, poi i finiti già visti; **Raccogli gli agenti idle** (finiti e già visti): oltre il numero scelto vanno dietro una voce `⋯ N` che li elenca al passaggio del mouse |
-| Generale | **Sempre in primo piano**, **Mostra finestra**, **Avvia lollipop all'accesso** (una voce `Run` utente nel registro su Windows, un LaunchAgent su macOS), **Lingua** |
+| Generale | **Sempre in primo piano**, **Mostra finestra**, **Avvia lollipop all'accesso** (una voce `Run` utente nel registro su Windows, un LaunchAgent su macOS), **Cerca aggiornamenti su GitHub**, **Lingua** |
 | Integrazioni | **Claude Code**: il file a cui lollipop aggiunge l'hook (clic per aprirlo), stato, **Installa** (poi **Ripara**), **Rimuovi** |
 | Informazioni | versione e link a questo repository |
 
@@ -148,7 +148,13 @@ lollipop.exe -once | more     # Windows
 ./lollipop -once              # macOS
 ```
 
-Il comando stampa agenti, stati e pannello attivo, poi esce.
+Il comando stampa agenti, stati, pannello attivo, versione e ultima release, poi esce.
+
+### Aggiornamenti
+
+Una volta al giorno lollipop chiede a GitHub l'ultima release. Quando ne esce una più recente lo segnalano il menu,
+il tooltip dell'icona e la pagina **Informazioni**, con il link alla pagina della release da cui scaricarla. Non
+scarica né installa nulla da solo. Si disattiva in **Generale**; le build compilate dai sorgenti non controllano.
 
 ## Come funziona
 

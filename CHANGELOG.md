@@ -17,6 +17,9 @@ text of its GitHub Release.
 - **Collapse idle agents** (finished and already seen): past the chosen number they go behind a `⋯ N` entry, which lists
   them vertically on mouseover (upward in the lower half of the screen). Off by default.
 - While the mouse is over the window, entries keep their place; the new order applies when it leaves.
+- **Update check**: once a day lollipop asks GitHub for the latest release and, when a newer one is out, says so in
+  the menu, the tray tooltip and the About page, with a link to the release. It downloads nothing. It can be turned
+  off in General.
 
 ### Fixed
 

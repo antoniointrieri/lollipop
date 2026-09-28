@@ -9,6 +9,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Tag builds carry their version (main.version), which the update check compares with the latest release.
+env:
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -21,7 +25,7 @@ jobs:
       # Risorse dell'exe con la versione dal tag (git describe; senza tag: 0.0.0.0).
       - run: go generate -run go-winres
       # Niente -s -w: i binari Go strippati e non firmati prendono piu' falsi positivi dagli antivirus euristici.
-      - run: go build -trimpath -ldflags "-H=windowsgui" -o lollipop.exe .
+      - run: go build -trimpath -ldflags "-H=windowsgui -X main.version=${{ env.VERSION }}" -o lollipop.exe .
       - uses: actions/upload-artifact@v7
         with:
           name: lollipop-windows
@@ -40,8 +44,8 @@ jobs:
       - run: go test ./...
       - name: "build (universale: arm64 + amd64)"
         run: |
-          GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o lollipop-arm64 .
-          GOARCH=amd64 CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64" go build -trimpath -ldflags "-s -w" -o lollipop-amd64 .
+          GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o lollipop-arm64 .
+          GOARCH=amd64 CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64" go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o lollipop-amd64 .
           lipo -create -output lollipop lollipop-arm64 lollipop-amd64
           lipo -info lollipop
           tar -czf lollipop-macos.tar.gz lollipop   # tar: lo zip degli artifact perde il bit di esecuzione
