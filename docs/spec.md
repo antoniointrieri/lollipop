@@ -393,19 +393,19 @@ installer, altri strumenti come Codex o Gemini.
 Con molti agenti la barra diventa più lunga dello schermo. Tutto è opzionale: con i valori predefiniti la barra
 resta com'era (ordine alfabetico, nessun raggruppamento, nessuna ellissi).
 
-### Menu
+### Impostazioni
 
-```
-Ordine               ▸  ◉ Alfabetico  ○ Ultima attività  ─  ☐ Raggruppa per stato
-Agenti done visibili ▸  ◉ Tutti  ○ 0  ○ 1  ○ 3  ○ 5  ○ 10
-```
+Nella pagina **Voci** della finestra delle impostazioni (§14): **Ordine** (Alfabetico / Ultima attività),
+**Raggruppa per stato**, **Raccogli gli agenti idle** con il numero di quelli che restano visibili.
 
-In `settings.json`: `order` (`alpha` | `recent`), `groupByState`, `doneMax` (`-1` = tutti).
+In `settings.json`: `order` (`alpha` | `recent`), `side` (`right` | `left`), `groupByState`, `doneMax` (`-1` = tutti).
 
 ### Ordine
 
-- Le voci più importanti stanno a destra, il bordo che resta fermo mentre la finestra cresce verso sinistra.
-- **Alfabetico**: come prima, da sinistra a destra.
+- **Voci più importanti**: a destra (predefinito), il bordo che resta fermo mentre la finestra cresce verso
+  sinistra, oppure a sinistra. Qui sotto "a destra" vale per il predefinito; con "a sinistra" tutto si specchia,
+  ellissi compresa, tranne l'ordine alfabetico.
+- **Alfabetico**: come prima, sempre da sinistra a destra.
 - **Ultima attività**: l'agente con il cambio di stato più recente sta a destra. Il momento del cambio è il poll in
   cui lollipop lo osserva: gli agenti trovati all'avvio sono alla pari e restano in ordine alfabetico. La fine
   del lampeggio (agente visto) non conta come attività.
@@ -414,7 +414,7 @@ In `settings.json`: `order` (`alpha` | `recent`), `groupByState`, `doneMax` (`-1
 
 ### Ellissi
 
-- Con **Agenti done visibili** = N restano in barra solo gli N agenti idle con il cambio di stato più recente (a
+- Con **Raccogli gli agenti idle** attivo e N visibili restano in barra solo gli N agenti idle con il cambio di stato più recente (a
   parità, quelli più a destra). Gli altri vanno dietro una voce grigia `⋯ K` (K = quanti sono), all'estremo
   sinistro della barra accanto alla maniglia. Solo gli idle possono finire lì: un agente che richiede attenzione
   resta sempre in barra.
@@ -439,3 +439,39 @@ torna subito in barra, e un agente nuovo compare a sinistra. Quando il mouse esc
 - Il frontend decide la direzione della lista da `window.screenY` e `screen.availTop/availHeight` (da verificare
   con più monitor e su macOS) e invia `size` con l'altezza della barra e la direzione; `place` ricava la cima della barra dai limiti
   della finestra e tiene fissa quella.
+
+## 14. v0.4 — finestra delle impostazioni
+
+> Stato: **approvata** (2026-09-28). Supera la scelta della §7 ("niente finestra di impostazioni"): con le
+> opzioni della §13 il menu era diventato illeggibile.
+
+- Il menu contestuale (finestra e icona) si riduce a **Impostazioni…**, **Mostra finestra**, **Esci**.
+- **Impostazioni…** apre una finestra normale (con cornice, nella taskbar, non sempre in primo piano), una sola:
+  riaprirla la porta davanti, chiuderla la nasconde. Titolo "Impostazioni di lollipop".
+- **Stile del sistema**: controlli standard (casella di spunta, menu a tendina, cursore, campo numerico, pulsante)
+  nel tema chiaro/scuro e nel colore d'accento del sistema; la pagina li dispone soltanto, senza ridisegnarli:
+  navigazione a sinistra, una riga per impostazione (etichetta a sinistra, controllo a destra), niente sottotitoli.
+  Tasto destro disattivato. Sfondo Mica su Windows 11 22H2+, vibrancy su macOS, sfondo pieno su Windows 10.
+  Accento: su Windows dalla `AccentPalette` del registro (tonalità scura in tema chiaro, chiara in tema scuro,
+  come le Impostazioni), su macOS `-apple-system-control-accent`.
+- **Spiegazioni**: nessun "?" né tooltip sulle impostazioni. Le informazioni importanti (cosa fa un'integrazione)
+  sono scritte per esteso nella pagina.
+- **Cursori** per Dimensione (70-160%, passo 5) e Velocità del lampeggio (periodo 200-1500 ms, passo 50; verso
+  destra più veloce). Il valore si applica al rilascio; il Go lo riporta comunque nei limiti.
+- **Icona della finestra**: il lollipop rosso, passato a Wails come `Options.Icon` (Wails cerca l'icona dell'exe
+  nella risorsa 3, go-winres la mette altrove).
+- **Pagine**:
+
+| Pagina | Contenuto |
+|---|---|
+| Aspetto | Forma, Indicatore, Dimensione, Velocità del lampeggio, Vista compatta |
+| Voci | Ordine, Voci più importanti (a destra / a sinistra), Raggruppa per stato, Raccogli gli agenti idle + quanti lasciarne visibili (0-99) |
+| Generale | Sempre in primo piano, Mostra finestra, Avvia lollipop all'accesso, Lingua |
+| Integrazioni | una sezione per agente, per ora solo **Claude Code**: "lollipop aggiunge un hook a `settings.json`" con il percorso cliccabile (lo apre con l'app predefinita, o apre la cartella se il file non c'è), stato, Installa/Ripara, Rimuovi |
+| Informazioni | versione (dal tag stampato da `go build`), licenza, link al repo |
+
+- Effetto immediato come prima, niente pulsante Salva.
+- **Implementazione**: seconda finestra Wails su `frontend/settings.html`, creata alla prima apertura. La pagina
+  chiede lo stato con `settings-ready` e riceve `settings` (come la barra) e `status` (integrazione Claude Code,
+  avvio all'accesso, versione, accento, sfondo). Invia `setting` {key, value} per i campi di `settings.json`
+  (solo quelli ammessi), `autostart`, `claude` (`install` | `remove`), `open-claude-settings` e `open-repo`.

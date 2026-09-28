@@ -10,11 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 type position struct{ Right, Top int }
@@ -28,6 +29,7 @@ type settings struct {
 	Scale          int       `json:"scale"` // percent
 	Compact        bool      `json:"compact"`
 	Order          string    `json:"order"` // "alpha" | "recent"
+	Side           string    `json:"side"`  // where the most important entries go: "right" | "left"
 	GroupByState   bool      `json:"groupByState"`
 	DoneMax        int       `json:"doneMax"` // idle entries outside the "⋯"; -1: all
 	AlwaysOnTop    bool      `json:"alwaysOnTop"`
@@ -41,7 +43,7 @@ func settingsFile() string {
 }
 
 func loadSettings() settings {
-	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, Order: "alpha", DoneMax: -1, AlwaysOnTop: true, ShowWindow: true}
+	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, Order: "alpha", Side: "right", DoneMax: -1, AlwaysOnTop: true, ShowWindow: true}
 	if raw, err := os.ReadFile(settingsFile()); err == nil {
 		_ = json.Unmarshal(raw, &s)
 	}
@@ -64,18 +66,15 @@ type ui struct {
 	visMu sync.Mutex // serializes Show/Hide; never taken on the UI thread
 	shown bool
 
-	checks         []check // checkable items of every menu, re-synced on each change
-	menus          []*application.Menu
-	claudeItems    []claudeItems
-	autostartItems []*application.MenuItem // checked from the OS state, not from settings
+	checks      []check // checkable items of every menu, re-synced on each change
+	menus       []*application.Menu
+	settingsWin *application.WebviewWindow // created on first open
 }
 
 type check struct {
 	item *application.MenuItem
 	on   func(settings) bool
 }
-
-type claudeItems struct{ status, install, remove *application.MenuItem }
 
 var uiLang atomic.Value // "en" | "it"
 
@@ -100,12 +99,6 @@ func (u *ui) get() settings {
 	return u.s
 }
 
-func radio[T comparable](u *ui, m *application.Menu, label string, field func(*settings) *T, v T) {
-	on := func(s settings) bool { return *field(&s) == v }
-	item := m.AddRadio(label, on(u.s)).OnClick(func(*application.Context) { u.change(func(s *settings) { *field(s) = v }) })
-	u.checks = append(u.checks, check{item, on})
-}
-
 func toggle(u *ui, m *application.Menu, label string, field func(*settings) *bool) {
 	on := func(s settings) bool { return *field(&s) }
 	item := m.AddCheckbox(label, on(u.s)).OnClick(func(*application.Context) { u.change(func(s *settings) { *field(s) = !*field(s) }) })
@@ -115,79 +108,17 @@ func toggle(u *ui, m *application.Menu, label string, field func(*settings) *boo
 // buildMenus (re)creates the window and tray menus, e.g. after a language change.
 // They are separate objects: no shared native handles.
 func (u *ui) buildMenus() {
-	u.checks, u.menus, u.claudeItems, u.autostartItems = nil, nil, nil, nil
+	u.checks, u.menus = nil, nil
 	ctx := u.app.ContextMenu.New()
 	u.buildMenu(ctx.Menu)
 	u.app.ContextMenu.Add("main", ctx)
 	u.tray.SetMenu(u.buildMenu(application.NewMenu()))
-	u.refreshClaudeStatus()
-	u.refreshAutostart()
 }
 
+// buildMenu holds only what is needed often; everything else is in the settings window.
 func (u *ui) buildMenu(m *application.Menu) *application.Menu {
-	shape := func(s *settings) *string { return &s.Shape }
-	sub := m.AddSubmenu(tr("Shape", "Forma"))
-	radio(u, sub, tr("Rectangle", "Rettangolo"), shape, "rect")
-	radio(u, sub, tr("Pill", "Capsula"), shape, "pill")
-
-	mark := func(s *settings) *string { return &s.Marker }
-	sub = m.AddSubmenu(tr("Indicator", "Indicatore"))
-	radio(u, sub, tr("Dot", "Pallino"), mark, "dot")
-	radio(u, sub, "Lollipop", mark, "lollipop")
-
-	blink := func(s *settings) *int { return &s.BlinkMs }
-	sub = m.AddSubmenu(tr("Blinking", "Lampeggio"))
-	radio(u, sub, tr("Slow (1 s)", "Lento (1 s)"), blink, 1000)
-	radio(u, sub, tr("Normal (500 ms)", "Normale (500 ms)"), blink, 500)
-	radio(u, sub, tr("Fast (250 ms)", "Veloce (250 ms)"), blink, 250)
-
-	scale := func(s *settings) *int { return &s.Scale }
-	sub = m.AddSubmenu(tr("Size", "Dimensione"))
-	radio(u, sub, tr("Small (85%)", "Piccola (85%)"), scale, 85)
-	radio(u, sub, tr("Normal", "Normale"), scale, 100)
-	radio(u, sub, tr("Large (125%)", "Grande (125%)"), scale, 125)
-
-	toggle(u, m, tr("Compact", "Compatta"), func(s *settings) *bool { return &s.Compact })
-
-	order := func(s *settings) *string { return &s.Order }
-	sub = m.AddSubmenu(tr("Order", "Ordine"))
-	radio(u, sub, tr("Alphabetical", "Alfabetico"), order, "alpha")
-	radio(u, sub, tr("Last activity", "Ultima attività"), order, "recent")
-	sub.AddSeparator()
-	toggle(u, sub, tr("Group by state", "Raggruppa per stato"), func(s *settings) *bool { return &s.GroupByState })
-
-	doneMax := func(s *settings) *int { return &s.DoneMax }
-	sub = m.AddSubmenu(tr("Done agents shown", "Agenti done visibili"))
-	radio(u, sub, tr("All", "Tutti"), doneMax, -1)
-	for _, n := range []int{0, 1, 3, 5, 10} {
-		radio(u, sub, strconv.Itoa(n), doneMax, n)
-	}
-	m.AddSeparator()
-	toggle(u, m, tr("Always on top", "Sempre in primo piano"), func(s *settings) *bool { return &s.AlwaysOnTop })
+	m.Add(tr("Settings…", "Impostazioni…")).OnClick(func(*application.Context) { go u.openSettings() })
 	toggle(u, m, tr("Show window", "Mostra finestra"), func(s *settings) *bool { return &s.ShowWindow })
-	u.autostartItems = append(u.autostartItems, m.AddCheckbox(tr("Start at login", "Avvia all'accesso"), false).
-		OnClick(func(*application.Context) { u.toggleAutostart() }))
-	m.AddSeparator()
-	sub = m.AddSubmenu("Claude Code")
-	ci := claudeItems{status: sub.Add("").SetEnabled(false)}
-	ci.install = sub.Add("").OnClick(func(*application.Context) {
-		if claudeHooksStatus() == hooksAbsent {
-			u.claudeAction(installClaudeHooks, tr(
-				"Claude Code integration installed. Sessions that were already open may need a restart to show up.",
-				"Integrazione con Claude Code installata. Le sessioni già aperte potrebbero dover essere riavviate per comparire."))
-		} else {
-			u.claudeAction(installClaudeHooks, tr("Claude Code integration repaired.", "Integrazione con Claude Code riparata."))
-		}
-	})
-	ci.remove = sub.Add(tr("Remove integration", "Rimuovi integrazione")).OnClick(func(*application.Context) {
-		u.claudeAction(removeClaudeHooks, tr("Claude Code integration removed.", "Integrazione con Claude Code rimossa."))
-	})
-	u.claudeItems = append(u.claudeItems, ci)
-	lang := func(s *settings) *string { return &s.Lang }
-	sub = m.AddSubmenu("Language / Lingua") // bilingual: findable whatever the current language
-	radio(u, sub, tr("Automatic", "Automatica"), lang, "auto")
-	radio(u, sub, "English", lang, "en")
-	radio(u, sub, "Italiano", lang, "it")
 	m.AddSeparator()
 	m.Add(tr("Quit", "Esci")).OnClick(func(*application.Context) {
 		u.save()
@@ -197,6 +128,51 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 	return m
 }
 
+// settingKeys are the settings.json fields the settings window may change.
+var settingKeys = map[string]bool{"lang": true, "shape": true, "marker": true, "blinkMs": true, "scale": true,
+	"compact": true, "order": true, "side": true, "groupByState": true, "doneMax": true, "alwaysOnTop": true, "showWindow": true}
+
+// set changes one setting by its JSON name, as sent by the settings window.
+func (u *ui) set(key string, value any) {
+	raw, err := json.Marshal(map[string]any{key: value})
+	if !settingKeys[key] || err != nil {
+		return
+	}
+	u.change(func(s *settings) {
+		_ = json.Unmarshal(raw, s)
+		s.Scale, s.BlinkMs = max(50, min(s.Scale, 200)), max(100, min(s.BlinkMs, 3000)) // sliders: 70-160%, 200-1500 ms
+		s.DoneMax = max(-1, s.DoneMax)
+	})
+}
+
+// openSettings shows the settings window, creating it the first time. Closing it only hides it.
+func (u *ui) openSettings() {
+	u.mu.Lock()
+	w := u.settingsWin
+	u.mu.Unlock()
+	if w == nil {
+		w = u.app.Window.NewWithOptions(application.WebviewWindowOptions{
+			Name: "settings", Title: settingsTitle(), URL: "/settings.html",
+			Width: 760, Height: 540, MinWidth: 620, MinHeight: 420,
+			BackgroundType:             application.BackgroundTypeTranslucent, // Mica on Windows 11, vibrancy on macOS
+			Windows:                    application.WindowsWindow{BackdropType: application.Mica, Theme: application.SystemDefault},
+			Mac:                        application.MacWindow{Backdrop: application.MacBackdropTranslucent},
+			DefaultContextMenuDisabled: true,
+		})
+		w.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+			e.Cancel()
+			go w.Hide()
+		})
+		u.mu.Lock()
+		u.settingsWin = w
+		u.mu.Unlock()
+	}
+	w.Show()
+	w.Focus()
+}
+
+func settingsTitle() string { return tr("lollipop settings", "Impostazioni di lollipop") }
+
 func (u *ui) change(set func(*settings)) {
 	u.mu.Lock()
 	set(&u.s)
@@ -205,6 +181,12 @@ func (u *ui) change(set func(*settings)) {
 	if l := resolveLang(s.Lang); l != uiLang.Load() {
 		uiLang.Store(l)
 		u.buildMenus()
+		u.mu.Lock()
+		w := u.settingsWin
+		u.mu.Unlock()
+		if w != nil {
+			w.SetTitle(settingsTitle())
+		}
 	} else {
 		for _, c := range u.checks {
 			c.item.SetChecked(c.on(s))
@@ -366,9 +348,11 @@ func (u *ui) updateTray(items []item, errMsg string) {
 
 var trayIcons map[string][]byte // built in setupTray, not at init: "lollipop hook" must start fast
 
-func lollipopPNG(base color.RGBA) []byte {
+func lollipopPNG(base color.RGBA) []byte { return lollipopPNGSize(base, 32) }
+
+func lollipopPNGSize(base color.RGBA, n int) []byte {
 	var buf bytes.Buffer
-	_ = png.Encode(&buf, lollipopImage(base, 32))
+	_ = png.Encode(&buf, lollipopImage(base, n))
 	return buf.Bytes()
 }
 
@@ -428,21 +412,45 @@ func (st hooksStatus) label() string {
 	return tr("not installed", "non installata")
 }
 
-// refreshClaudeStatus updates the status line and greys out the actions that don't apply.
-func (u *ui) refreshClaudeStatus() {
-	st := claudeHooksStatus()
-	for _, ci := range u.claudeItems {
-		ci.status.SetLabel(tr("Integration: ", "Integrazione: ") + st.label())
-		if st == hooksAbsent {
-			ci.install.SetLabel(tr("Install", "Installa"))
-		} else {
-			ci.install.SetLabel(tr("Repair", "Ripara"))
-		}
-		ci.install.SetEnabled(st != hooksInvalid)
-		ci.remove.SetEnabled(st == hooksOK || st == hooksBroken)
+func (st hooksStatus) code() string {
+	switch st {
+	case hooksOK:
+		return "ok"
+	case hooksBroken:
+		return "broken"
+	case hooksInvalid:
+		return "invalid"
 	}
-	for _, m := range u.menus {
-		m.Update()
+	return "absent"
+}
+
+// emitStatus sends the settings window what lives outside settings.json: Claude Code hook, login entry, version.
+func (u *ui) emitStatus() {
+	on, _ := autostartState()
+	light, dark := accentColors()
+	u.app.Event.Emit("status", map[string]any{"claude": claudeHooksStatus().code(), "claudeSettings": claudeSettingsPath(),
+		"autostart": on, "version": appVersion(), "translucent": translucentBackdrop(), "accent": []string{light, dark}})
+}
+
+// appVersion is the tag stamped by go build (v0.4.0), or a pseudo-version for untagged commits.
+func appVersion() string {
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return bi.Main.Version
+	}
+	return "dev"
+}
+
+// claudeRun runs an action of the settings window's Claude Code page: "install" (or repair) or "remove".
+func (u *ui) claudeRun(action string) {
+	switch {
+	case action == "remove":
+		u.claudeAction(removeClaudeHooks, tr("Claude Code integration removed.", "Integrazione con Claude Code rimossa."))
+	case action == "install" && claudeHooksStatus() == hooksAbsent:
+		u.claudeAction(installClaudeHooks, tr(
+			"Claude Code integration installed. Sessions that were already open may need a restart to show up.",
+			"Integrazione con Claude Code installata. Le sessioni già aperte potrebbero dover essere riavviate per comparire."))
+	case action == "install":
+		u.claudeAction(installClaudeHooks, tr("Claude Code integration repaired.", "Integrazione con Claude Code riparata."))
 	}
 }
 
@@ -452,12 +460,12 @@ func (u *ui) claudeAction(fn func() error, done string) {
 	} else {
 		u.app.Dialog.Info().SetTitle("lollipop").SetMessage(done).Show()
 	}
-	u.refreshClaudeStatus()
+	u.emitStatus()
 }
 
 // claudeStartup silently repairs an installed hook (e.g. the exe was moved) and asks once whether to install it.
 func (u *ui) claudeStartup() {
-	defer u.refreshClaudeStatus()
+	defer u.emitStatus()
 	switch claudeHooksStatus() {
 	case hooksBroken:
 		_ = installClaudeHooks()
@@ -488,23 +496,11 @@ func (u *ui) claudeStartup() {
 	d.SetDefaultButton(yes).SetCancelButton(no).Show()
 }
 
-// refreshAutostart checks the "Start at login" items when the OS entry exists.
-func (u *ui) refreshAutostart() {
-	on, _ := autostartState()
-	for _, it := range u.autostartItems {
-		it.SetChecked(on)
-	}
-	for _, m := range u.menus {
-		m.Update()
-	}
-}
-
-func (u *ui) toggleAutostart() {
-	on, _ := autostartState()
-	if err := setAutostart(!on); err != nil {
+func (u *ui) setAutostart(on bool) {
+	if err := setAutostart(on); err != nil {
 		u.app.Dialog.Error().SetTitle("lollipop").SetMessage(err.Error()).Show()
 	}
-	u.refreshAutostart()
+	u.emitStatus()
 }
 
 // autostartStartup points an existing entry to this exe, e.g. after it was moved.
@@ -512,5 +508,4 @@ func (u *ui) autostartStartup() {
 	if on, current := autostartState(); on && !current {
 		_ = setAutostart(true)
 	}
-	u.refreshAutostart()
 }

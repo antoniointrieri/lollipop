@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"image/color"
 	"io/fs"
 	"log"
 	"os"
@@ -45,7 +46,9 @@ func main() {
 
 	frontend, _ := fs.Sub(assets, "frontend")
 	app := application.New(application.Options{
-		Name:   "lollipop",
+		Name: "lollipop",
+		// icon of the settings window: Wails looks for resource 3, go-winres stores the exe icon under another id
+		Icon:   lollipopPNGSize(color.RGBA{255, 0, 0, 255}, 64),
 		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(frontend)},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyAccessory, // no Dock icon
@@ -113,6 +116,35 @@ func main() {
 		}
 	})
 
+	// settings window
+	app.Event.On("settings-ready", func(*application.CustomEvent) {
+		u.emitSettings(u.get())
+		u.emitStatus()
+	})
+	app.Event.On("setting", func(e *application.CustomEvent) {
+		m, _ := e.Data.(map[string]any)
+		key, _ := m["key"].(string)
+		u.set(key, m["value"])
+	})
+	app.Event.On("autostart", func(e *application.CustomEvent) {
+		on, _ := e.Data.(bool)
+		u.setAutostart(on)
+	})
+	app.Event.On("claude", func(e *application.CustomEvent) {
+		action, _ := e.Data.(string)
+		u.claudeRun(action)
+	})
+	app.Event.On("open-claude-settings", func(*application.CustomEvent) {
+		p := claudeSettingsPath()
+		if _, err := os.Stat(p); err != nil {
+			p = claudeConfigDir() // no settings.json yet: its folder
+		}
+		_ = app.Browser.OpenFile(p)
+	})
+	app.Event.On("open-repo", func(*application.CustomEvent) {
+		_ = app.Browser.OpenURL("https://github.com/antoniointrieri/lollipop")
+	})
+
 	go func() {
 		for range time.Tick(pollInterval) {
 			if s := u.get(); s.AlwaysOnTop && s.ShowWindow {
@@ -130,7 +162,7 @@ func main() {
 				return a.Key == s.Focused && orcaInFront(orca.orcaPID())
 			}
 			set := u.get()
-			items, errMsg := arrange(tr.update(s, seen), set.Order, set.GroupByState, set.DoneMax), ""
+			items, errMsg := arrange(tr.update(s, seen), set.Order, set.Side, set.GroupByState, set.DoneMax), ""
 			if err != nil {
 				errMsg = err.Error()
 			}

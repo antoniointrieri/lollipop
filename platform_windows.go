@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -210,6 +211,25 @@ func osLanguage() string {
 	}
 	return "en"
 }
+
+// accentColors returns the Windows accent as Windows 11 Settings uses it: a darker shade in light mode, a lighter
+// one in dark mode (AccentPalette: light 3, 2, 1, base, dark 1, 2, 3; RGBA). "" when not available.
+func accentColors() (light, dark string) {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Explorer\Accent`, registry.QUERY_VALUE)
+	if err != nil {
+		return "", ""
+	}
+	defer k.Close()
+	p, _, err := k.GetBinaryValue("AccentPalette")
+	if err != nil || len(p) < 32 {
+		return "", ""
+	}
+	hex := func(i int) string { return fmt.Sprintf("#%02x%02x%02x", p[4*i], p[4*i+1], p[4*i+2]) }
+	return hex(4), hex(1)
+}
+
+// translucentBackdrop: Mica needs Windows 11 22H2 (build 22621); earlier the settings window gets a solid background.
+func translucentBackdrop() bool { return windows.RtlGetVersion().BuildNumber >= 22621 }
 
 const (
 	runKey        = `Software\Microsoft\Windows\CurrentVersion\Run`

@@ -112,6 +112,11 @@ func osLanguage() string {
 	return "en"
 }
 
+// The settings page takes the accent from CSS (-apple-system-control-accent).
+func accentColors() (light, dark string) { return "", "" }
+
+func translucentBackdrop() bool { return true }
+
 const launchAgentLabel = "io.github.antoniointrieri.lollipop"
 
 // launchd loads the user's LaunchAgents at login: no launchctl needed. Without KeepAlive, Quit stays quit.

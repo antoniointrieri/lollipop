@@ -164,10 +164,10 @@ func (t *tracker) update(s snapshot, seen func(agent) bool) []item {
 func (it item) idle() bool { return it.State == "done" && !it.Blink }
 
 // arrange orders the entries (alphabetical in input) left to right and marks the idle ones that go behind the "⋯".
-// The most important entries sit at the right, the edge that stays still while the window grows to the left.
+// The most important entries sit on side ("right" or "left"); alphabetical order always reads left to right.
 // order is "alpha" or "recent"; doneMax < 0 shows every idle entry.
-func arrange(items []item, order string, group bool, doneMax int) []item {
-	rank := func(it item) int {
+func arrange(items []item, order, side string, group bool, doneMax int) []item {
+	rank := func(it item) int { // higher is more important
 		switch {
 		case !group:
 			return 0
@@ -180,19 +180,24 @@ func arrange(items []item, order string, group bool, doneMax int) []item {
 		}
 		return 3 // waiting for the user
 	}
+	left := side == "left"
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]
 		if ra, rb := rank(a), rank(b); ra != rb {
-			return ra < rb
+			return (ra < rb) != left
 		}
-		return order == "recent" && a.seq < b.seq
+		return order == "recent" && a.seq != b.seq && (a.seq < b.seq) != left
 	})
 	if doneMax < 0 {
 		return items
 	}
-	// the most recently changed stay visible; on a tie, the ones nearer the right edge
-	var idle []int
-	for i := len(items) - 1; i >= 0; i-- {
+	// the most recently changed stay visible; on a tie, the ones nearer the important side
+	var idle []int // starting from the important side
+	for k := range items {
+		i := k
+		if !left {
+			i = len(items) - 1 - k
+		}
 		if items[i].idle() {
 			idle = append(idle, i)
 		}

@@ -104,24 +104,21 @@ all'accesso** nel menu.
 |---|---|
 | Clic su una voce | porta davanti l'agente (Orca sul suo terminale, oppure la finestra di Claude Code) |
 | Trascina la maniglia `⋮` | sposta la finestra |
-| Tasto destro (sulla finestra o sull'icona) | menu delle impostazioni ed **Esci** |
+| Tasto destro (sulla finestra o sull'icona) | menu: **Impostazioni…**, **Mostra finestra**, **Esci** |
 | Clic sull'icona nella traybar | mostra la finestra (se ci sono agenti) e la porta davanti |
 
-Impostazioni disponibili dal menu (hanno effetto subito e vengono salvate):
+**Impostazioni…** apre una finestra nello stile del sistema operativo (Mica su Windows 11), divisa in pagine. Le
+modifiche hanno effetto subito e vengono salvate:
 
-- **Forma**: rettangolo o capsula
-- **Indicatore**: pallino o lollipop (la testa dell'icona, con la spirale bianca)
-- **Lampeggio**: lento, normale o veloce
-- **Dimensione**: piccola, normale o grande
-- **Compatta**: solo i pallini, con il nome nel tooltip
-- **Ordine**: alfabetico o per ultima attività (la più recente a destra), più **Raggruppa per stato**: da destra,
-  in attesa, appena finiti, al lavoro, poi i finiti già visti
-- **Agenti done visibili**: tutti, oppure al massimo 0, 1, 3, 5 o 10; gli altri finiti già visti vanno dietro una
-  voce `⋯ N` che li elenca al passaggio del mouse. Finché il mouse è sulla finestra le voci restano ferme
-- **Sempre in primo piano** e **Mostra finestra**
-- **Avvia all'accesso**: una voce `Run` utente nel registro su Windows, un LaunchAgent su macOS
-- **Claude Code**: stato dell'integrazione, **Installa** (poi **Ripara**), **Rimuovi integrazione**
-- **Language / Lingua**: automatica (lingua del sistema operativo), English o Italiano
+| Pagina | Impostazioni |
+|---|---|
+| Aspetto | **Forma** (rettangolo o capsula), **Indicatore** (pallino o testa del lollipop), **Dimensione** e **Velocità del lampeggio** (cursori), **Vista compatta** (solo pallini, nome nel tooltip) |
+| Voci | **Ordine**: alfabetico o per ultima attività; **Voci più importanti**: a destra (il bordo che resta fermo) o a sinistra; **Raggruppa per stato**: dal più importante, in attesa, appena finiti, al lavoro, poi i finiti già visti; **Raccogli gli agenti idle** (finiti e già visti): oltre il numero scelto vanno dietro una voce `⋯ N` che li elenca al passaggio del mouse |
+| Generale | **Sempre in primo piano**, **Mostra finestra**, **Avvia lollipop all'accesso** (una voce `Run` utente nel registro su Windows, un LaunchAgent su macOS), **Lingua** |
+| Integrazioni | **Claude Code**: il file a cui lollipop aggiunge l'hook (clic per aprirlo), stato, **Installa** (poi **Ripara**), **Rimuovi** |
+| Informazioni | versione e link a questo repository |
+
+Finché il mouse è sulla barra le voci restano ferme.
 
 Impostazioni e posizione stanno in `settings.json`, dentro `%APPDATA%\lollipop` (Windows) o
 `~/Library/Application Support/lollipop` (macOS).
@@ -133,7 +130,7 @@ Al primo avvio lollipop propone di aggiungere un hook alle impostazioni utente d
 (`~/.claude/settings.json`, con backup). L'hook esegue `lollipop.exe hook` in background a ogni evento di Claude
 Code, e Claude non lo aspetta mai. Le sessioni dentro Orca vengono ignorate, perché le mostra già Orca.
 
-Il sottomenu **Claude Code** mostra se l'integrazione è attiva e permette di ripararla o rimuoverla. La
+La pagina **Integrazioni** delle impostazioni mostra se l'integrazione è attiva e permette di ripararla o rimuoverla. La
 rimozione tocca solo le voci di lollipop; se cancelli l'exe senza rimuoverla, le voci rimaste non fanno nulla.
 Se sposti l'exe, lollipop corregge il percorso al successivo avvio.
 

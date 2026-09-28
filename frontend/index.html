@@ -28,7 +28,11 @@
   /* "⋯": the idle entries beyond the chosen number, listed vertically on mouseover */
   #wrap { display: flex; flex-direction: column; align-items: flex-end; width: max-content; }
   #wrap.up { flex-direction: column-reverse; }
-  #pop { display: none; flex-direction: column; align-items: flex-end; gap: 0.25rem; padding: 0 0.2rem 0.2rem; overflow-y: auto; }
+  #bar { align-self: flex-end; } /* the right edge stays still */
+  /* the list hangs under (or over) the "⋯", which sits at the less important end */
+  #pop { display: none; flex-direction: column; align-self: flex-start; align-items: flex-start; gap: 0.25rem;
+    padding: 0 0.2rem 0.2rem; overflow-y: auto; }
+  .side-left #pop { align-self: flex-end; align-items: flex-end; }
   #wrap.up #pop { padding: 0.2rem 0.2rem 0; }
   #pop.open { display: flex; }
   .a.more { color: gray; }
@@ -47,7 +51,7 @@ const headColor = state => state === "working" ? "rgb(230,176,0)" : rgb(state);
 const $ = id => document.getElementById(id), list = $("list"), bar = $("bar"), pop = $("pop"), wrap = $("wrap");
 let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer, lang = "en", lollipop = false;
 // While the mouse is over the window the entries don't move (frozen: keys and "⋯" membership as on screen).
-let hover = false, frozen = [], popOpen = false, popTimer;
+let frozen = [], popOpen = false, popTimer, side = "right";
 const text = (en, it) => lang === "it" ? it : en;
 
 function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
@@ -80,15 +84,19 @@ function entry(it) {
   return a;
 }
 
-// Fresh data in the order on screen. An entry leaves the "⋯" as soon as it needs attention; new agents go left.
+// Fresh data in the order on screen. An entry leaves the "⋯" as soon as it needs attention; new agents go to the
+// less important end.
 function keepOrder(items) {
   const byKey = new Map(items.map(it => [it.key, it])), known = new Set(frozen.map(f => f.key));
   const kept = frozen.filter(f => byKey.has(f.key)).map(f => ({ ...byKey.get(f.key), more: f.more && byKey.get(f.key).more }));
-  return [...items.filter(it => !known.has(it.key)), ...kept];
+  const added = items.filter(it => !known.has(it.key));
+  return side === "left" ? [...kept, ...added] : [...added, ...kept];
 }
 
 function render(msg) {
   last = msg;
+  // the browser's own :hover, which clears when the pointer leaves the window even if no event says so
+  const hover = document.documentElement.matches(":hover");
   const error = msg.error, items = hover ? keepOrder(msg.items) : msg.items;
   frozen = items.map(it => ({ key: it.key, more: it.more }));
   list.replaceChildren();
@@ -105,12 +113,13 @@ function render(msg) {
     m.title = text(`${hidden.length} more done agents`, `Altri ${hidden.length} agenti done`);
     m.onmouseenter = m.onclick = openPop;
     m.onmouseleave = closeSoon;
-    list.append(m);
     pop.append(...hidden.map(entry));
+    list.append(m); // at the less important end
   } else {
     popOpen = false;
   }
-  list.append(...items.filter(it => !it.more).map(entry));
+  const shown = items.filter(it => !it.more).map(entry);
+  if (side === "left") list.prepend(...shown); else list.append(...shown);
   pop.classList.toggle("open", popOpen);
   report();
 }
@@ -147,12 +156,10 @@ function closePop() {
 
 pop.onmouseenter = () => clearTimeout(popTimer);
 pop.onmouseleave = closeSoon;
-document.addEventListener("mouseover", () => { hover = true; });
 document.addEventListener("mouseout", e => {
   if (e.relatedTarget) return; // still inside the window
-  hover = false;
   closePop();
-  render(last); // apply the order held while the mouse was over
+  setTimeout(() => render(last), 50); // apply the order held while the mouse was over, once :hover has cleared
 });
 
 // Highlight for 500 ms; repeated clicks in that window are ignored.
@@ -170,6 +177,8 @@ function applySettings(s) {
   document.body.classList.toggle("pill", s.shape === "pill");
   document.body.classList.toggle("compact", s.compact);
   lollipop = s.marker === "lollipop";
+  side = s.side;
+  document.body.classList.toggle("side-left", side === "left");
   document.documentElement.style.setProperty("--scale", s.scale / 100);
   clearInterval(blinkTimer);
   // blinking alternates the marker with a 40% version of it (spiral included)

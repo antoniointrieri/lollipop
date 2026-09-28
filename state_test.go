@@ -117,21 +117,25 @@ func TestArrange(t *testing.T) {
 		return s
 	}
 	for _, c := range []struct {
-		order   string
-		group   bool
-		doneMax int
-		want    string
+		order, side string
+		group       bool
+		doneMax     int
+		want        string
 	}{
-		{"alpha", false, -1, "abcdef"}, // as before
-		{"recent", false, -1, "bfcaed"},
-		{"alpha", true, -1, "aefdcb"}, // idle, working, done to see, waiting
-		{"recent", true, -1, "faedcb"},
-		{"alpha", true, 1, "(a)e(f)dcb"}, // the most recently changed idle stays out
-		{"alpha", false, 0, "(a)bcd(e)(f)"},
-		{"recent", true, 5, "faedcb"},
+		{"alpha", "right", false, -1, "abcdef"}, // as before
+		{"recent", "right", false, -1, "bfcaed"},
+		{"alpha", "right", true, -1, "aefdcb"}, // idle, working, done to see, waiting
+		{"recent", "right", true, -1, "faedcb"},
+		{"alpha", "right", true, 1, "(a)e(f)dcb"}, // the most recently changed idle stays out
+		{"alpha", "right", false, 0, "(a)bcd(e)(f)"},
+		{"recent", "right", true, 5, "faedcb"},
+		{"alpha", "left", false, -1, "abcdef"}, // alphabetical still reads left to right
+		{"recent", "left", false, -1, "deacbf"},
+		{"alpha", "left", true, -1, "bcdaef"}, // waiting, done to see, working, idle
+		{"recent", "left", true, 1, "bcde(a)(f)"},
 	} {
-		if got := keys(arrange(in(), c.order, c.group, c.doneMax)); got != c.want {
-			t.Errorf("%s group=%v doneMax=%d: %s, want %s", c.order, c.group, c.doneMax, got, c.want)
+		if got := keys(arrange(in(), c.order, c.side, c.group, c.doneMax)); got != c.want {
+			t.Errorf("%s %s group=%v doneMax=%d: %s, want %s", c.order, c.side, c.group, c.doneMax, got, c.want)
 		}
 	}
 }

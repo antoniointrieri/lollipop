@@ -105,24 +105,21 @@ To start it at login, tick **Start at login** in the menu.
 |---|---|
 | Click an entry | brings the agent to the front (Orca on its terminal, or the Claude Code window) |
 | Drag the `⋮` handle | moves the window |
-| Right-click (window or tray icon) | settings menu and **Quit** |
+| Right-click (window or tray icon) | menu: **Settings…**, **Show window**, **Quit** |
 | Click the tray icon | shows the window (when there are agents) and brings it to the front |
 
-Settings, available from the menu, apply immediately and are saved:
+**Settings…** opens a window in the style of the OS (Mica on Windows 11), with its pages. Changes apply
+immediately and are saved:
 
-- **Shape**: rectangle or pill
-- **Indicator**: dot or lollipop (the tray icon's head with its white spiral)
-- **Blinking**: slow, normal or fast
-- **Size**: small, normal or large
-- **Compact**: dots only, with the name in the tooltip
-- **Order**: alphabetical or last activity (most recent at the right), plus **Group by state**: from the right,
-  waiting, just finished, working, then the finished agents already seen
-- **Done agents shown**: all, or at most 0, 1, 3, 5 or 10; the other finished agents already seen go behind a
-  `⋯ N` entry that lists them on mouseover. While the mouse is over the window, entries don't move
-- **Always on top** and **Show window**
-- **Start at login**: a per-user `Run` registry entry on Windows, a LaunchAgent on macOS
-- **Claude Code**: integration status, **Install** (then **Repair**), **Remove integration**
-- **Language / Lingua**: automatic (OS language), English or Italiano
+| Page | Settings |
+|---|---|
+| Appearance | **Shape** (rectangle or pill), **Indicator** (dot or lollipop head), **Size** and **Blinking speed** (sliders), **Compact view** (dots only, name in the tooltip) |
+| Entries | **Order**: alphabetical or last activity; **Most important entries**: on the right (the edge that stays still) or on the left; **Group by state**: from the most important, waiting, just finished, working, then the finished agents already seen; **Collapse idle agents** (finished and already seen): past the chosen number they go behind a `⋯ N` entry that lists them on mouseover |
+| General | **Always on top**, **Show window**, **Start lollipop at login** (a per-user `Run` registry entry on Windows, a LaunchAgent on macOS), **Language** |
+| Integrations | **Claude Code**: the file lollipop adds its hook to (click to open it), status, **Install** (then **Repair**), **Remove** |
+| About | version and link to this repository |
+
+While the mouse is over the bar, entries don't move.
 
 Settings and window position are stored in `settings.json` inside `%APPDATA%\lollipop` (Windows) or
 `~/Library/Application Support/lollipop` (macOS). Alt+F4 hides the window instead of closing the app: use
@@ -134,7 +131,7 @@ On first start lollipop offers to add a hook to your Claude Code user settings (
 a backup). The hook runs `lollipop.exe hook` in the background on every Claude Code event: Claude never waits
 for it. Sessions running inside Orca are skipped, since Orca already shows them.
 
-The **Claude Code** submenu shows whether the integration is active and lets you repair or remove it. Removing
+The **Integrations** page of the settings shows whether the integration is active and lets you repair or remove it. Removing
 it only touches lollipop's own entries; if you delete the exe without removing it, the leftover entries do
 nothing. If you move the exe, lollipop fixes the path on its next start.
 

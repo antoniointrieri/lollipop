@@ -8,11 +8,14 @@ text of its GitHub Release.
 
 ### Added
 
-- **Order** menu: entries in alphabetical order or by last activity (most recent state change at the right), and
-  **Group by state**: from the right, agents waiting for you, just finished, working, then the finished ones
-  already seen.
-- **Done agents shown** menu: past the chosen number, finished agents already seen go behind a `⋯ N` entry,
-  which lists them vertically on mouseover (upward in the lower half of the screen). Off by default.
+- **Settings window** in the style of the OS (Mica on Windows 11, vibrancy on macOS), with pages: Appearance,
+  Entries, General, Integrations (Claude Code), About. The right-click menu keeps only **Settings…**, **Show window** and
+  **Quit**.
+- **Order**: entries in alphabetical order or by last activity (most recent state change first); **Most
+  important entries** on the right (default) or on the left; **Group by state**: from the most important, agents
+  waiting for you, just finished, working, then the finished ones already seen.
+- **Collapse idle agents** (finished and already seen): past the chosen number they go behind a `⋯ N` entry, which lists
+  them vertically on mouseover (upward in the lower half of the screen). Off by default.
 - While the mouse is over the window, entries keep their place; the new order applies when it leaves.
 
 ### Fixed
