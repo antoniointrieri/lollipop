@@ -6,11 +6,13 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-28
+
 ### Added
 
 - Clicking a Claude Code session of the **VS Code extension** or of the **Claude app** (Code tab) opens its own
   tab, besides bringing the window to the front. VS Code extension sessions started with an older lollipop get
-  it from their next event.
+  it from their next event. Tested on Windows; on macOS it should work the same way but is untested.
 
 ## [0.4.0] - 2026-09-28
 
@@ -99,7 +101,8 @@ First release: a Go + Wails v3 port of the PowerShell proof of concept.
   top, show window. Window position and settings are remembered.
 - Windows build and experimental macOS build (universal binary) from GitHub Actions.
 
-[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.4.0
 [0.3.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.3.0
 [0.2.1]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.2.1
