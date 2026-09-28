@@ -6,6 +6,8 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-28
+
 ### Added
 
 - **Start at login** menu item: a per-user `Run` registry entry on Windows, a LaunchAgent on macOS. An entry
@@ -19,7 +21,6 @@ text of its GitHub Release.
   protocol error from Orca still shows the red dot.
 - The yellow of the tray icon (and of the new lollipop indicator) is slightly darker, so the white spiral stays
   visible.
-
 - The Windows executable carries version information (name, description, version) and an application manifest,
   and is no longer stripped of debug symbols. Both changes aim at fewer false positives from heuristic antivirus
   detections such as `Trojan:Win32/Wacatac.B!ml`.
@@ -69,7 +70,8 @@ First release: a Go + Wails v3 port of the PowerShell proof of concept.
   top, show window. Window position and settings are remembered.
 - Windows build and experimental macOS build (universal binary) from GitHub Actions.
 
-[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.3.0
 [0.2.1]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.2.1
 [0.2.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.1.0
