@@ -385,3 +385,57 @@ installer, altri strumenti come Codex o Gemini.
 - **Misure**: testa di 1rem in vista normale e compatta, 1,15rem per il segno di "nessun agente" / errore.
 - **Lampeggio**: la fase spenta applica `filter: brightness(0.4)` all'indicatore, così si abbassano insieme testa
   e spirale. Anche il pallino ora lampeggia così, con lo stesso risultato di prima (colore al 40%).
+
+## 13. v0.4 — ordine delle voci e agenti done dietro l'ellissi
+
+> Stato: **approvata** (2026-09-28).
+
+Con molti agenti la barra diventa più lunga dello schermo. Tutto è opzionale: con i valori predefiniti la barra
+resta com'era (ordine alfabetico, nessun raggruppamento, nessuna ellissi).
+
+### Menu
+
+```
+Ordine               ▸  ◉ Alfabetico  ○ Ultima attività  ─  ☐ Raggruppa per stato
+Agenti done visibili ▸  ◉ Tutti  ○ 0  ○ 1  ○ 3  ○ 5  ○ 10
+```
+
+In `settings.json`: `order` (`alpha` | `recent`), `groupByState`, `doneMax` (`-1` = tutti).
+
+### Ordine
+
+- Le voci più importanti stanno a destra, il bordo che resta fermo mentre la finestra cresce verso sinistra.
+- **Alfabetico**: come prima, da sinistra a destra.
+- **Ultima attività**: l'agente con il cambio di stato più recente sta a destra. Il momento del cambio è il poll in
+  cui lollipop lo osserva: gli agenti trovati all'avvio sono alla pari e restano in ordine alfabetico. La fine
+  del lampeggio (agente visto) non conta come attività.
+- **Raggruppa per stato**: da destra, in attesa (rosso) · finiti da vedere (verde lampeggiante) · al lavoro (giallo
+  e blu) · **idle**, cioè finiti già visti (verde fisso). Dentro ogni gruppo vale l'ordine scelto.
+
+### Ellissi
+
+- Con **Agenti done visibili** = N restano in barra solo gli N agenti idle con il cambio di stato più recente (a
+  parità, quelli più a destra). Gli altri vanno dietro una voce grigia `⋯ K` (K = quanti sono), all'estremo
+  sinistro della barra accanto alla maniglia. Solo gli idle possono finire lì: un agente che richiede attenzione
+  resta sempre in barra.
+- Al passaggio del mouse sulla voce `⋯` (o al clic) si apre una lista verticale con quelle voci, allineata a
+  destra, cliccabile come la barra. Si apre verso l'alto se la barra sta nella metà inferiore dello schermo, verso il
+  basso altrimenti, ed è alta al massimo lo spazio disponibile da quel lato (poi scorre). Si chiude 300 ms dopo che
+  il mouse è uscito da `⋯` e dalla lista.
+- La finestra si allarga per contenere la lista, tenendo fermi il bordo destro e la riga della barra: aprendo verso
+  l'alto si sposta in su di quanto è alta la lista. La posizione salvata è quella della barra.
+
+### Voci ferme sotto il mouse
+
+Finché il mouse è sulla finestra le voci non cambiano posto e non entrano nell'ellissi: i colori si aggiornano,
+l'ordine resta quello sullo schermo. Così un clic non colpisce una voce appena spostata, e la voce cliccata (che
+smette di lampeggiare e diventa idle) non scappa via. Due eccezioni: una voce nell'ellissi che richiede attenzione
+torna subito in barra, e un agente nuovo compare a sinistra. Quando il mouse esce si applica l'ordine attuale.
+
+### Implementazione
+
+- Ordine e appartenenza all'ellissi si calcolano in Go (`arrange` in `state.go`, testata), dopo il tracker, che
+  registra il poll dell'ultimo cambio di stato di ogni agente. Ogni voce inviata al frontend ha il campo `more`.
+- Il frontend decide la direzione della lista da `window.screenY` e `screen.availTop/availHeight` (da verificare
+  con più monitor e su macOS) e invia `size` con l'altezza della barra e la direzione; `place` ricava la cima della barra dai limiti
+  della finestra e tiene fissa quella.

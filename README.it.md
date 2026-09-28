@@ -114,6 +114,10 @@ Impostazioni disponibili dal menu (hanno effetto subito e vengono salvate):
 - **Lampeggio**: lento, normale o veloce
 - **Dimensione**: piccola, normale o grande
 - **Compatta**: solo i pallini, con il nome nel tooltip
+- **Ordine**: alfabetico o per ultima attività (la più recente a destra), più **Raggruppa per stato**: da destra,
+  in attesa, appena finiti, al lavoro, poi i finiti già visti
+- **Agenti done visibili**: tutti, oppure al massimo 0, 1, 3, 5 o 10; gli altri finiti già visti vanno dietro una
+  voce `⋯ N` che li elenca al passaggio del mouse. Finché il mouse è sulla finestra le voci restano ferme
 - **Sempre in primo piano** e **Mostra finestra**
 - **Avvia all'accesso**: una voce `Run` utente nel registro su Windows, un LaunchAgent su macOS
 - **Claude Code**: stato dell'integrazione, **Installa** (poi **Ripara**), **Rimuovi integrazione**

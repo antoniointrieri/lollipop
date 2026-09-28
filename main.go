@@ -69,8 +69,10 @@ func main() {
 	u.setupTray()
 	u.buildMenus()
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-		go u.claudeStartup()
-		go u.autostartStartup()
+		go func() { // one after the other: both update the menus, which Wails doesn't guard against concurrent use
+			u.autostartStartup()
+			u.claudeStartup()
+		}()
 	})
 
 	tr := newTracker()
@@ -88,9 +90,11 @@ func main() {
 		m, _ := e.Data.(map[string]any)
 		w, _ := m["w"].(float64)
 		h, _ := m["h"].(float64)
+		bar, _ := m["bar"].(float64)
+		up, _ := m["up"].(bool)
 		mu.Lock()
 		defer mu.Unlock()
-		u.place(int(w), int(h))
+		u.place(int(w), int(h), int(bar), up)
 	})
 	app.Event.On("focus", func(e *application.CustomEvent) {
 		m, _ := e.Data.(map[string]any)
@@ -125,7 +129,8 @@ func main() {
 				}
 				return a.Key == s.Focused && orcaInFront(orca.orcaPID())
 			}
-			items, errMsg := tr.update(s, seen), ""
+			set := u.get()
+			items, errMsg := arrange(tr.update(s, seen), set.Order, set.GroupByState, set.DoneMax), ""
 			if err != nil {
 				errMsg = err.Error()
 			}

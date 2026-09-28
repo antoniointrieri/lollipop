@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -26,6 +27,9 @@ type settings struct {
 	BlinkMs        int       `json:"blinkMs"`
 	Scale          int       `json:"scale"` // percent
 	Compact        bool      `json:"compact"`
+	Order          string    `json:"order"` // "alpha" | "recent"
+	GroupByState   bool      `json:"groupByState"`
+	DoneMax        int       `json:"doneMax"` // idle entries outside the "⋯"; -1: all
 	AlwaysOnTop    bool      `json:"alwaysOnTop"`
 	ShowWindow     bool      `json:"showWindow"`
 	ClaudePrompted bool      `json:"claudePrompted"` // first-run question about the Claude Code hook already asked
@@ -37,7 +41,7 @@ func settingsFile() string {
 }
 
 func loadSettings() settings {
-	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, AlwaysOnTop: true, ShowWindow: true}
+	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, Order: "alpha", DoneMax: -1, AlwaysOnTop: true, ShowWindow: true}
 	if raw, err := os.ReadFile(settingsFile()); err == nil {
 		_ = json.Unmarshal(raw, &s)
 	}
@@ -52,6 +56,8 @@ type ui struct {
 	mu       sync.Mutex
 	s        settings
 	placed   bool
+	above    int  // height of the "⋯" list open above the bar, which stays still on screen
+	width    int  // as set by place: Bounds reports a few pixels more, and the right edge would creep
 	idle     bool // no agents and no error: nothing to show, only the tray icon stays
 	trayLast string
 
@@ -142,6 +148,20 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 	radio(u, sub, tr("Large (125%)", "Grande (125%)"), scale, 125)
 
 	toggle(u, m, tr("Compact", "Compatta"), func(s *settings) *bool { return &s.Compact })
+
+	order := func(s *settings) *string { return &s.Order }
+	sub = m.AddSubmenu(tr("Order", "Ordine"))
+	radio(u, sub, tr("Alphabetical", "Alfabetico"), order, "alpha")
+	radio(u, sub, tr("Last activity", "Ultima attività"), order, "recent")
+	sub.AddSeparator()
+	toggle(u, sub, tr("Group by state", "Raggruppa per stato"), func(s *settings) *bool { return &s.GroupByState })
+
+	doneMax := func(s *settings) *int { return &s.DoneMax }
+	sub = m.AddSubmenu(tr("Done agents shown", "Agenti done visibili"))
+	radio(u, sub, tr("All", "Tutti"), doneMax, -1)
+	for _, n := range []int{0, 1, 3, 5, 10} {
+		radio(u, sub, strconv.Itoa(n), doneMax, n)
+	}
 	m.AddSeparator()
 	toggle(u, m, tr("Always on top", "Sempre in primo piano"), func(s *settings) *bool { return &s.AlwaysOnTop })
 	toggle(u, m, tr("Show window", "Mostra finestra"), func(s *settings) *bool { return &s.ShowWindow })
@@ -246,10 +266,12 @@ func (u *ui) save() {
 	var pos *position
 	if u.isPlaced() {
 		b := u.win.Bounds()
-		pos = &position{Right: b.X + b.Width, Top: b.Y}
+		pos = &position{Right: b.X, Top: b.Y}
 	}
 	u.mu.Lock()
 	if pos != nil {
+		pos.Right += u.width
+		pos.Top += u.above
 		u.s.Pos = pos
 	}
 	raw, _ := json.Marshal(u.s)
@@ -259,12 +281,15 @@ func (u *ui) save() {
 	}
 }
 
-// place resizes the window to its content keeping the right edge fixed, clamped to its screen.
-// The first time it restores the saved position (or top right of the primary screen). Callers serialize it.
-func (u *ui) place(w, h int) {
+// place resizes the window to its content keeping the right edge fixed, clamped to its screen, and the bar row
+// (height bar) still: with up the "⋯" list opens above it. The first time it restores the saved position (or top
+// right of the primary screen). Callers serialize it.
+func (u *ui) place(w, h, bar int, up bool) {
 	s, first := u.get(), !u.isPlaced()
 	b := u.win.Bounds()
-	right, top := b.X+b.Width, b.Y
+	u.mu.Lock()
+	right, top := b.X+u.width, b.Y+u.above
+	u.mu.Unlock()
 	scr, _ := u.win.GetScreen()
 	if first {
 		scr = nil
@@ -280,11 +305,19 @@ func (u *ui) place(w, h int) {
 			right, top = scr.WorkArea.X+scr.WorkArea.Width-80, scr.WorkArea.Y+40
 		}
 	}
+	above, width := 0, b.Width
+	if up && h > bar {
+		above = h - bar
+	}
 	if scr != nil {
 		right = min(right, scr.WorkArea.X+scr.WorkArea.Width)
-		u.win.SetBounds(application.Rect{X: max(scr.WorkArea.X, right-w), Y: top, Width: w, Height: h})
+		u.win.SetBounds(application.Rect{X: max(scr.WorkArea.X, right-w), Y: top - above, Width: w, Height: h})
+		width = w
+	} else {
+		above = 0
 	}
 	u.mu.Lock()
+	u.above, u.width = above, width
 	u.placed = true
 	u.mu.Unlock()
 	u.syncVisible()

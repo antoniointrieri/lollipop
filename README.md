@@ -115,6 +115,10 @@ Settings, available from the menu, apply immediately and are saved:
 - **Blinking**: slow, normal or fast
 - **Size**: small, normal or large
 - **Compact**: dots only, with the name in the tooltip
+- **Order**: alphabetical or last activity (most recent at the right), plus **Group by state**: from the right,
+  waiting, just finished, working, then the finished agents already seen
+- **Done agents shown**: all, or at most 0, 1, 3, 5 or 10; the other finished agents already seen go behind a
+  `⋯ N` entry that lists them on mouseover. While the mouse is over the window, entries don't move
 - **Always on top** and **Show window**
 - **Start at login**: a per-user `Run` registry entry on Windows, a LaunchAgent on macOS
 - **Claude Code**: integration status, **Install** (then **Repair**), **Remove integration**

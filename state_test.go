@@ -93,3 +93,62 @@ func TestSummary(t *testing.T) {
 		t.Errorf("errore: %s", c)
 	}
 }
+
+func TestArrange(t *testing.T) {
+	// input in alphabetical order, as the tracker returns it; seq: poll of the last state change
+	in := func() []item {
+		return []item{
+			{Key: "a", State: "done", seq: 3},
+			{Key: "b", State: "waiting", seq: 1},
+			{Key: "c", State: "done", Blink: true, seq: 2},
+			{Key: "d", State: "working", seq: 5},
+			{Key: "e", State: "done", seq: 4},
+			{Key: "f", State: "done", seq: 1},
+		}
+	}
+	keys := func(items []item) (s string) {
+		for _, it := range items {
+			if it.More {
+				s += "(" + it.Key + ")"
+			} else {
+				s += it.Key
+			}
+		}
+		return s
+	}
+	for _, c := range []struct {
+		order   string
+		group   bool
+		doneMax int
+		want    string
+	}{
+		{"alpha", false, -1, "abcdef"}, // as before
+		{"recent", false, -1, "bfcaed"},
+		{"alpha", true, -1, "aefdcb"}, // idle, working, done to see, waiting
+		{"recent", true, -1, "faedcb"},
+		{"alpha", true, 1, "(a)e(f)dcb"}, // the most recently changed idle stays out
+		{"alpha", false, 0, "(a)bcd(e)(f)"},
+		{"recent", true, 5, "faedcb"},
+	} {
+		if got := keys(arrange(in(), c.order, c.group, c.doneMax)); got != c.want {
+			t.Errorf("%s group=%v doneMax=%d: %s, want %s", c.order, c.group, c.doneMax, got, c.want)
+		}
+	}
+}
+
+func TestTrackerChanged(t *testing.T) {
+	tr := newTracker()
+	snap := func(states ...string) snapshot {
+		var s snapshot
+		for i, st := range states {
+			s.Agents = append(s.Agents, agent{Key: string(rune('a' + i)), State: st})
+		}
+		return s
+	}
+	never := func(agent) bool { return false }
+	tr.update(snap("working", "working"), never)
+	items := tr.update(snap("working", "done"), never)
+	if items[0].seq != 1 || items[1].seq != 2 {
+		t.Errorf("seq: %d %d, want 1 2", items[0].seq, items[1].seq)
+	}
+}

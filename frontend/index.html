@@ -25,10 +25,18 @@
   .empty.lp svg { display: block; width: 1.15rem; height: 1.15rem; }
   .compact .dot.lp { width: auto; height: auto; background: none; border-radius: 0; }
   .dim { filter: brightness(0.4); }
+  /* "⋯": the idle entries beyond the chosen number, listed vertically on mouseover */
+  #wrap { display: flex; flex-direction: column; align-items: flex-end; width: max-content; }
+  #wrap.up { flex-direction: column-reverse; }
+  #pop { display: none; flex-direction: column; align-items: flex-end; gap: 0.25rem; padding: 0 0.2rem 0.2rem; overflow-y: auto; }
+  #wrap.up #pop { padding: 0.2rem 0.2rem 0; }
+  #pop.open { display: flex; }
+  .a.more { color: gray; }
+  .compact .a.more { width: auto; padding: 0 0.4rem; }
 </style>
 </head>
 <body>
-<div id="bar"><span id="grip">⋮</span><span id="list"></span></div>
+<div id="wrap"><div id="bar"><span id="grip">⋮</span><span id="list"></span></div><div id="pop"></div></div>
 <script type="module">
 import * as wails from "/wails/runtime.js";
 
@@ -36,8 +44,10 @@ const colors = { working: [255, 215, 0], done: [50, 205, 50], monitoring: [0, 19
 const rgb = state => `rgb(${colors[state] || [255, 0, 0]})`;
 // a darker yellow under the lollipop's white spiral, which would barely show on the plain one
 const headColor = state => state === "working" ? "rgb(230,176,0)" : rgb(state);
-const list = document.getElementById("list"), bar = document.getElementById("bar");
+const $ = id => document.getElementById(id), list = $("list"), bar = $("bar"), pop = $("pop"), wrap = $("wrap");
 let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer, lang = "en", lollipop = false;
+// While the mouse is over the window the entries don't move (frozen: keys and "⋯" membership as on screen).
+let hover = false, frozen = [], popOpen = false, popTimer;
 const text = (en, it) => lang === "it" ? it : en;
 
 function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
@@ -59,28 +69,91 @@ function marker(cls, color) {
   return m;
 }
 
+function entry(it) {
+  const a = span("a" + (it.key === pressedKey ? " pressed" : ""), "");
+  const dot = marker("dot", lollipop ? headColor(it.state) : rgb(it.state)), name = span("name", it.label);
+  a.title = it.tip;
+  a.style.color = rgb(it.state);
+  a.onclick = () => click(it, a);
+  a.append(dot, name);
+  dots.push({ it, dot });
+  return a;
+}
+
+// Fresh data in the order on screen. An entry leaves the "⋯" as soon as it needs attention; new agents go left.
+function keepOrder(items) {
+  const byKey = new Map(items.map(it => [it.key, it])), known = new Set(frozen.map(f => f.key));
+  const kept = frozen.filter(f => byKey.has(f.key)).map(f => ({ ...byKey.get(f.key), more: f.more && byKey.get(f.key).more }));
+  return [...items.filter(it => !known.has(it.key)), ...kept];
+}
+
 function render(msg) {
-  const { items, error } = last = msg;
+  last = msg;
+  const error = msg.error, items = hover ? keepOrder(msg.items) : msg.items;
+  frozen = items.map(it => ({ key: it.key, more: it.more }));
   list.replaceChildren();
+  pop.replaceChildren();
   dots = [];
   if (!items.length) {
     const d = marker("empty", error ? "rgb(255,0,0)" : "dimgray");
     d.title = error ? text("Error: ", "Errore: ") + error : text("No active agents", "Nessun agente attivo");
     list.append(d);
   }
-  for (const it of items) {
-    const a = span("a" + (it.key === pressedKey ? " pressed" : ""), "");
-    const dot = marker("dot", lollipop ? headColor(it.state) : rgb(it.state)), name = span("name", it.label);
-    a.title = it.tip;
-    a.style.color = rgb(it.state);
-    a.onclick = () => click(it, a);
-    a.append(dot, name);
-    list.append(a);
-    dots.push({ it, dot });
+  const hidden = items.filter(it => it.more);
+  if (hidden.length) {
+    const m = span("a more", "⋯ " + hidden.length);
+    m.title = text(`${hidden.length} more done agents`, `Altri ${hidden.length} agenti done`);
+    m.onmouseenter = m.onclick = openPop;
+    m.onmouseleave = closeSoon;
+    list.append(m);
+    pop.append(...hidden.map(entry));
+  } else {
+    popOpen = false;
   }
-  const r = bar.getBoundingClientRect();
-  wails.Events.Emit("size", { w: Math.ceil(r.width), h: Math.ceil(r.height) });
+  list.append(...items.filter(it => !it.more).map(entry));
+  pop.classList.toggle("open", popOpen);
+  report();
 }
+
+function report() {
+  const r = wrap.getBoundingClientRect();
+  wails.Events.Emit("size", { w: Math.ceil(r.width), h: Math.ceil(r.height), bar: Math.ceil(bar.getBoundingClientRect().height),
+    up: wrap.classList.contains("up") });
+}
+
+// The list opens toward the larger half of the screen; while it is closed the window top is the bar top.
+// ponytail: screenY/availTop not yet verified with several monitors nor on macOS
+function openPop() {
+  clearTimeout(popTimer);
+  if (popOpen) return;
+  const top = window.screenY - (screen.availTop || 0), h = bar.getBoundingClientRect().height;
+  const up = top + h / 2 > screen.availHeight / 2;
+  wrap.classList.toggle("up", up);
+  pop.style.maxHeight = Math.max(0, (up ? top : screen.availHeight - top - h) - 8) + "px";
+  popOpen = true;
+  pop.classList.add("open");
+  report();
+}
+
+function closeSoon() { clearTimeout(popTimer); popTimer = setTimeout(closePop, 300); }
+
+function closePop() {
+  clearTimeout(popTimer);
+  if (!popOpen) return;
+  popOpen = false;
+  pop.classList.remove("open");
+  report();
+}
+
+pop.onmouseenter = () => clearTimeout(popTimer);
+pop.onmouseleave = closeSoon;
+document.addEventListener("mouseover", () => { hover = true; });
+document.addEventListener("mouseout", e => {
+  if (e.relatedTarget) return; // still inside the window
+  hover = false;
+  closePop();
+  render(last); // apply the order held while the mouse was over
+});
 
 // Highlight for 500 ms; repeated clicks in that window are ignored.
 function click(it, a) {

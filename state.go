@@ -112,23 +112,33 @@ type item struct {
 	State  string `json:"state"`
 	Tip    string `json:"tip"`
 	Blink  bool   `json:"blink"`
+	More   bool   `json:"more"` // behind the "⋯" entry
+	seq    int    // poll of the last state change: higher is more recent
 }
 
-// tracker remembers the last state of each agent and which ones finished but weren't looked at yet.
+// tracker remembers the last state of each agent, when it changed and which ones finished but weren't looked at yet.
 type tracker struct {
-	mu    sync.Mutex
-	prev  map[string]string
-	blink map[string]bool
+	mu      sync.Mutex
+	polls   int
+	prev    map[string]string
+	changed map[string]int
+	blink   map[string]bool
 }
 
-func newTracker() *tracker { return &tracker{prev: map[string]string{}, blink: map[string]bool{}} }
+func newTracker() *tracker {
+	return &tracker{prev: map[string]string{}, changed: map[string]int{}, blink: map[string]bool{}}
+}
 
 // update starts blinking on a working -> other transition observed here (nothing blinks at startup) and stops
 // when the agent works again or the user is looking at it; seen is called only for blinking agents.
 func (t *tracker) update(s snapshot, seen func(agent) bool) []item {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.polls++
 	for _, a := range s.Agents {
+		if t.prev[a.Key] != a.State { // agents found at startup all get the same poll
+			t.changed[a.Key] = t.polls
+		}
 		if t.prev[a.Key] == "working" && a.State != "working" {
 			t.blink[a.Key] = true
 		}
@@ -145,7 +155,51 @@ func (t *tracker) update(s snapshot, seen func(agent) bool) []item {
 	items := []item{}
 	for _, a := range s.Agents {
 		items = append(items, item{Key: a.Key, Handle: a.Handle, Label: a.Label, State: a.State,
-			Tip: "[" + a.State + "] " + a.Label + "\n" + a.Title, Blink: t.blink[a.Key]})
+			Tip: "[" + a.State + "] " + a.Label + "\n" + a.Title, Blink: t.blink[a.Key], seq: t.changed[a.Key]})
+	}
+	return items
+}
+
+// idle: finished and already seen, nothing to do for the user.
+func (it item) idle() bool { return it.State == "done" && !it.Blink }
+
+// arrange orders the entries (alphabetical in input) left to right and marks the idle ones that go behind the "⋯".
+// The most important entries sit at the right, the edge that stays still while the window grows to the left.
+// order is "alpha" or "recent"; doneMax < 0 shows every idle entry.
+func arrange(items []item, order string, group bool, doneMax int) []item {
+	rank := func(it item) int {
+		switch {
+		case !group:
+			return 0
+		case it.idle():
+			return 0
+		case it.State == "working" || it.State == "monitoring":
+			return 1
+		case it.State == "done":
+			return 2
+		}
+		return 3 // waiting for the user
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := items[i], items[j]
+		if ra, rb := rank(a), rank(b); ra != rb {
+			return ra < rb
+		}
+		return order == "recent" && a.seq < b.seq
+	})
+	if doneMax < 0 {
+		return items
+	}
+	// the most recently changed stay visible; on a tie, the ones nearer the right edge
+	var idle []int
+	for i := len(items) - 1; i >= 0; i-- {
+		if items[i].idle() {
+			idle = append(idle, i)
+		}
+	}
+	sort.SliceStable(idle, func(x, y int) bool { return items[idle[x]].seq > items[idle[y]].seq })
+	for _, i := range idle[min(doneMax, len(idle)):] {
+		items[i].More = true
 	}
 	return items
 }

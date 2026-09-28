@@ -6,6 +6,20 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Order** menu: entries in alphabetical order or by last activity (most recent state change at the right), and
+  **Group by state**: from the right, agents waiting for you, just finished, working, then the finished ones
+  already seen.
+- **Done agents shown** menu: past the chosen number, finished agents already seen go behind a `⋯ N` entry,
+  which lists them vertically on mouseover (upward in the lower half of the screen). Off by default.
+- While the mouse is over the window, entries keep their place; the new order applies when it leaves.
+
+### Fixed
+
+- A crash at startup (`concurrent map writes`) when the Claude Code and login checks updated the menus together.
+- The right edge of the window crept a few pixels to the right at every resize.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added
