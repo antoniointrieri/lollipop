@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -69,6 +70,8 @@ type ui struct {
 	menuMu sync.Mutex // serializes menu changes: an Update frees the native items another change may be touching
 	//                   (a macOS crash in v0.3.0); never taken on the UI thread
 	shown bool
+
+	saveTimer *time.Timer // pending save after the window moved
 
 	checks      []check // checkable items of every menu, re-synced on each change
 	menus       []*application.Menu
@@ -294,6 +297,17 @@ func (u *ui) save() {
 	}
 }
 
+// moved saves the position a second after the window stops moving: a close other than "Quit" (logoff, Task
+// Manager, a new exe) would lose it otherwise.
+func (u *ui) moved() {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.saveTimer != nil {
+		u.saveTimer.Stop()
+	}
+	u.saveTimer = time.AfterFunc(time.Second, u.save) // own goroutine: save calls window methods
+}
+
 // place resizes the window to its content keeping the right edge fixed, clamped to its screen, and the bar row
 // (height bar) still: with up the "⋯" list opens above it. The first time it restores the saved position (or top
 // right of the primary screen). Callers serialize it.
@@ -308,8 +322,9 @@ func (u *ui) place(w, h, bar int, up bool) {
 		scr = nil
 		if p := s.Pos; p != nil {
 			for _, s := range u.app.Screen.GetAll() {
-				if wa := s.WorkArea; p.Right > wa.X && p.Right <= wa.X+wa.Width && p.Top >= wa.Y && p.Top < wa.Y+wa.Height {
-					scr, right, top = s, p.Right, p.Top
+				// whole screen: always on top, the bar may sit over the taskbar
+				if sb := s.Bounds; p.Right > sb.X && p.Right <= sb.X+sb.Width && p.Top >= sb.Y && p.Top < sb.Y+sb.Height {
+					scr, right, top = s, p.Right, min(p.Top, sb.Y+sb.Height-bar)
 				}
 			}
 		}

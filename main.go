@@ -70,6 +70,7 @@ func main() {
 		e.Cancel() // Alt+F4 only hides the window; quitting is "Esci"
 		go u.change(func(s *settings) { s.ShowWindow = false })
 	})
+	u.win.OnWindowEvent(events.Common.WindowDidMove, func(*application.WindowEvent) { u.moved() })
 	u.setupTray()
 	u.buildMenus()
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
