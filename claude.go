@@ -188,6 +188,10 @@ func loadClaudeSessions() []agent {
 			os.Remove(file)
 			continue
 		}
+		// An Orca chat runs Claude Code under Orca without ORCA_PANE_KEY: Orca lists it as an agent already.
+		if strings.EqualFold(s.Host.Name, "Orca") {
+			continue
+		}
 		host := s.Host
 		host.Session = id
 		title := "Claude Code in " + hostLabel(host.Name)

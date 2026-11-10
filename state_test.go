@@ -17,19 +17,24 @@ func TestBuildSnapshot(t *testing.T) {
 	must(`{"worktrees":[
 		{"worktreeId":"w1","repo":"zeta","isMainWorktree":true,"isActive":true,"agents":[{"paneKey":"t1:l1","state":"working"}]},
 		{"worktreeId":"w2","repo":"alfa","displayName":"feat","isMainWorktree":false,"agents":[
-			{"paneKey":"t2:l2","state":"done"},{"paneKey":"t9:l9","state":"done"}]}]}`, &wt)
+			{"paneKey":"t2:l2","state":"done"},{"paneKey":"t9:l9","state":"done"},
+			{"paneKey":"chat:l3","state":"waiting","conversationName":"Chat","structuredHostOwned":true}]}]}`, &wt)
 	must(`{"terminals":[{"handle":"h1","tabId":"t1","leafId":"l1","title":"✳ Claude Code"},{"handle":"h2","tabId":"t2","leafId":"l2","title":"plain"}],
 		"visualLayouts":[{"worktreeId":"w1","root":{"activeTabId":"t1","tabs":[{"tabId":"t1","activeLeafId":"l1"}]}}]}`, &tl)
 	must(`{"entries":{"t1:l1":{"payload":{"workingMode":"monitoring"}}}}`, &hooks)
 
 	s := buildSnapshot(wt, tl, hooks)
-	if len(s.Agents) != 2 { // t9:l9 has no terminal: closed session
+	if len(s.Agents) != 3 { // t9:l9 has no terminal and isn't a live chat: closed session
 		t.Fatalf("agenti: %+v", s.Agents)
 	}
-	if a := s.Agents[0]; a.Label != "alfa/feat" || a.Handle != "h2" || a.State != "done" {
+	if a := s.Agents[0]; a.Label != "alfa/feat" || a.Key != "chat:l3" || a.Handle != "" || a.Worktree != "w2" ||
+		a.State != "waiting" || a.Title != "Chat" {
+		t.Errorf("chat: %+v", a)
+	}
+	if a := s.Agents[1]; a.Label != "alfa/feat" || a.Handle != "h2" || a.State != "done" || a.Worktree != "" {
 		t.Errorf("worktree secondario: %+v", a)
 	}
-	if a := s.Agents[1]; a.Label != "zeta" || a.State != "monitoring" || a.Title != "Claude Code" {
+	if a := s.Agents[2]; a.Label != "zeta" || a.State != "monitoring" || a.Title != "Claude Code" {
 		t.Errorf("worktree principale: %+v", a)
 	}
 	if s.Focused != "t1:l1" {

@@ -13,7 +13,10 @@ type worktreePS struct {
 	Worktrees []struct {
 		WorktreeID, Repo, DisplayName string
 		IsMainWorktree, IsActive      bool
-		Agents                        []struct{ PaneKey, State string }
+		Agents                        []struct {
+			PaneKey, State, ConversationName string
+			StructuredHostOwned              bool // chat tab live in this Orca (no terminal behind it)
+		}
 	}
 }
 
@@ -36,6 +39,7 @@ type lastStatus struct {
 
 type agent struct {
 	Key, Handle, State, Label, Title string
+	Worktree                         string   // set only for Orca chats, which have no terminal handle
 	Host                             *hostRef // set only for Claude Code sessions outside Orca
 }
 
@@ -60,21 +64,25 @@ func buildSnapshot(wt worktreePS, tl terminalList, hooks lastStatus) snapshot {
 			label += "/" + w.DisplayName
 		}
 		for _, a := range w.Agents {
-			i, ok := terms[a.PaneKey]
-			if !ok { // "done" without a terminal is a closed session
+			ag := agent{Key: a.PaneKey, State: a.State, Label: label}
+			if i, ok := terms[a.PaneKey]; ok {
+				ag.Handle, ag.Title = tl.Terminals[i].Handle, stripGlyph(tl.Terminals[i].Title)
+			} else if a.StructuredHostOwned {
+				ag.Worktree, ag.Title = w.WorktreeID, a.ConversationName
+			} else { // "done" without a terminal or a live chat is a closed session
 				continue
 			}
-			state := a.State
-			if state == "working" && hooks.Entries[a.PaneKey].Payload.WorkingMode == "monitoring" {
-				state = "monitoring"
+			if ag.State == "working" && hooks.Entries[a.PaneKey].Payload.WorkingMode == "monitoring" {
+				ag.State = "monitoring"
 			}
-			t := tl.Terminals[i]
-			s.Agents = append(s.Agents, agent{Key: a.PaneKey, Handle: t.Handle, State: state, Label: label, Title: stripGlyph(t.Title)})
+			s.Agents = append(s.Agents, ag)
 		}
 	}
 	sortAgents(s.Agents)
 	// Pane in front = active worktree -> its active tab -> its active leaf.
-	// ponytail: root group only; with tabs split into several groups it picks the root one
+	// ponytail: root group only; with tabs split into several groups it picks the root one.
+	// The layouts list terminal tabs only: with a chat in front nothing is focused, so its blink doesn't stop by itself
+	// (clicking the entry stops it).
 	for _, l := range tl.VisualLayouts {
 		if l.WorktreeID != activeWT || activeWT == "" {
 			continue

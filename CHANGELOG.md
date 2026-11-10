@@ -6,6 +6,12 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Orca agents in **chat** mode: clicking one now opens its chat tab in Orca. Before, they were picked up as plain
+  Claude Code sessions, and the click only brought Orca to the front. They now carry the worktree label and the
+  chat name like terminal agents.
+
 ## [0.5.0] - 2026-09-28
 
 ### Added

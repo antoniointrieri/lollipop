@@ -118,7 +118,11 @@ func main() {
 			return
 		}
 		activateOrca(orca.orcaPID())
-		if err := orca.focusTerminal(a.Handle); err != nil {
+		if a.Worktree != "" {
+			if err := orca.revealPane(a.Worktree, a.Key); err != nil {
+				log.Println("terminal.reveal:", err)
+			}
+		} else if err := orca.focusTerminal(a.Handle); err != nil {
 			log.Println("terminal.focus:", err)
 		}
 	})
@@ -219,6 +223,9 @@ func printOnce(orca *orcaClient) {
 	}
 	for _, a := range s.Agents {
 		where := strings.TrimSpace(a.Handle)
+		if a.Worktree != "" {
+			where = "chat"
+		}
 		if a.Host != nil {
 			where = sessionLink(*a.Host)
 		}

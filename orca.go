@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -108,6 +109,15 @@ func (c *orcaClient) orcaPID() int {
 func (c *orcaClient) focusTerminal(handle string) error {
 	var ignored any
 	return c.call("terminal.focus", map[string]string{"terminal": handle}, &ignored)
+}
+
+// revealPane brings any tab to the front, also a chat tab, which has no terminal handle for terminal.focus.
+// A chat's paneKey is "<tabId>:<leafId>".
+// ponytail: terminal.reveal isn't in the CLI; Orca accepts it only from callers on this machine
+func (c *orcaClient) revealPane(worktreeID, paneKey string) error {
+	tab, leaf, _ := strings.Cut(paneKey, ":")
+	var ignored any
+	return c.call("terminal.reveal", map[string]string{"worktreeId": worktreeID, "tabId": tab, "leafId": leaf}, &ignored)
 }
 
 func (c *orcaClient) poll() (snapshot, error) {
