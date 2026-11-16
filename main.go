@@ -55,7 +55,7 @@ func main() {
 			ActivationPolicy: application.ActivationPolicyAccessory, // no Dock icon
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
-		Windows: application.WindowsOptions{DisableQuitOnLastWindowClosed: true},
+		Windows: application.WindowsOptions{DisableQuitOnLastWindowClosed: true, WndProcInterceptor: barWndProc},
 	})
 	u := &ui{app: app, s: s, idle: true} // hidden until the first poll finds an agent
 	u.win = app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -65,6 +65,10 @@ func main() {
 		BackgroundColour:           application.NewRGB(32, 32, 36),
 		DefaultContextMenuDisabled: true,
 		Windows:                    application.WindowsWindow{HiddenOnTaskbar: true},
+		// no caption buttons: on Windows they showed through, the close one red under the mouse, in the frames where
+		// the webview had not yet repainted during a resize
+		MinimiseButtonState: application.ButtonHidden, MaximiseButtonState: application.ButtonHidden,
+		CloseButtonState: application.ButtonHidden,
 	})
 	u.win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		e.Cancel() // Alt+F4 only hides the window; quitting is "Esci"
@@ -98,9 +102,11 @@ func main() {
 		h, _ := m["h"].(float64)
 		bar, _ := m["bar"].(float64)
 		up, _ := m["up"].(bool)
+		animate, _ := m["animate"].(bool)
+		visible, _ := m["visible"].(float64)
 		mu.Lock()
 		defer mu.Unlock()
-		u.place(int(w), int(h), int(bar), up)
+		u.place(int(w), int(h), int(bar), up, animate, int(visible))
 	})
 	app.Event.On("focus", func(e *application.CustomEvent) {
 		m, _ := e.Data.(map[string]any)
@@ -178,7 +184,7 @@ func main() {
 				return a.Key == s.Focused && orcaInFront(orca.orcaPID())
 			}
 			set := u.get()
-			items, errMsg := arrange(tr.update(s, seen), set.Order, set.Side, set.GroupByState, set.DoneMax), ""
+			items, errMsg := arrange(tr.update(s, seen), set.Order, set.side(), set.GroupByState, set.DoneMax), ""
 			if err != nil {
 				errMsg = err.Error()
 			}

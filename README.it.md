@@ -113,8 +113,8 @@ modifiche hanno effetto subito e vengono salvate:
 
 | Pagina | Impostazioni |
 |---|---|
-| Aspetto | **Forma** (rettangolo o capsula), **Indicatore** (pallino o testa del lollipop), **Dimensione** e **Velocità del lampeggio** (cursori), **Vista compatta** (solo pallini, nome nel tooltip) |
-| Voci | **Ordine**: alfabetico o per ultima attività; **Voci più importanti**: a destra (il bordo che resta fermo) o a sinistra; **Raggruppa per stato**: dal più importante, in attesa, appena finiti, al lavoro, poi i finiti già visti; **Raccogli gli agenti idle** (finiti e già visti): oltre il numero scelto vanno dietro una voce `⋯ N` che li elenca al passaggio del mouse |
+| Aspetto | **Forma** (rettangolo o capsula), **Indicatore** (pallino o testa del lollipop), **Dimensione** e **Velocità del lampeggio** (cursori), **Disposizione** (barra orizzontale o colonna verticale), **Nomi**: sempre visibili, nascosti (solo pallini, nome nel tooltip) oppure, nella colonna verticale, al passaggio del mouse |
+| Voci | **Ordine**: alfabetico o per ultima attività; **Voci più importanti**: a destra (il bordo che resta fermo) o a sinistra (nella colonna verticale sempre in alto); **Raggruppa per stato**: dal più importante, in attesa, appena finiti, al lavoro, poi i finiti già visti; **Raccogli gli agenti idle** (finiti e già visti): oltre il numero scelto vanno dietro una voce `⋯ N` che li elenca al passaggio del mouse |
 | Generale | **Sempre in primo piano**, **Mostra finestra**, **Avvia lollipop all'accesso** (una voce `Run` utente nel registro su Windows, un LaunchAgent su macOS), **Cerca aggiornamenti su GitHub**, **Lingua** |
 | Integrazioni | **Claude Code**: il file a cui lollipop aggiunge l'hook (clic per aprirlo), stato, **Installa** (poi **Ripara**), **Rimuovi** |
 | Informazioni | versione e link a questo repository |

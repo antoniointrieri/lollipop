@@ -6,6 +6,26 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Vertical column** layout (Settings, Appearance, Layout): entries stacked under the grip, the most important at
+  the top, dots on the right edge, which stays still.
+- **Names on mouseover** in the vertical column: only the indicators show, and the names of all entries appear,
+  widening the window to the left with a 250 ms animation, while the mouse is over it. In this mode the window has
+  no shadow on Windows.
+- Dragging the window stops its right edge at the right edge of the screen (Windows): it can still move onto a
+  monitor further right.
+
+### Fixed
+
+- Windows: a bar narrower than 42 px (the vertical column, the empty indicator) was widened by Windows and went past
+  the right edge of the screen.
+
+### Changed
+
+- The **Compact view** checkbox becomes the **Names** setting (always visible, hidden, on mouseover). An existing
+  compact view carries over as "hidden".
+
 ## [0.5.1] - 2026-11-16
 
 ### Fixed

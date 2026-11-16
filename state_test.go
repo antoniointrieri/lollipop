@@ -183,3 +183,24 @@ func TestNewer(t *testing.T) {
 		}
 	}
 }
+
+func TestParseSettings(t *testing.T) {
+	cases := []struct{ raw, names, orientation string }{
+		{"", "always", "horizontal"},
+		{`{"compact": true}`, "never", "horizontal"},
+		{`{"compact": false}`, "always", "horizontal"},
+		{`{"compact": true, "names": "hover", "orientation": "vertical"}`, "hover", "vertical"},
+	}
+	for _, c := range cases {
+		var raw []byte
+		if c.raw != "" {
+			raw = []byte(c.raw)
+		}
+		if s := parseSettings(raw); s.Names != c.names || s.Orientation != c.orientation {
+			t.Errorf("%s: names %q orientation %q, want %q %q", c.raw, s.Names, s.Orientation, c.names, c.orientation)
+		}
+	}
+	if s := (settings{Orientation: "vertical", Side: "right"}); s.side() != "left" {
+		t.Errorf("vertical column: side %q, want left (most important first)", s.side())
+	}
+}

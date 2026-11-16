@@ -37,6 +37,23 @@
   #pop.open { display: flex; }
   .a.more { color: gray; }
   .compact .a.more { width: auto; padding: 0 0.4rem; }
+  /* vertical: a column with the grip on top, the most important entries first. The dots sit on the right edge, which
+     stays still, and the names open to their left; the content hangs from the right edge of the window. */
+  body.vertical { display: flex; justify-content: flex-end; }
+  .vertical #bar { flex-direction: column; align-items: stretch; }
+  .vertical #grip { text-align: center; line-height: 1; }
+  .vertical #list { flex-direction: column; }
+  .vertical .a { flex-direction: row-reverse; }
+  .vertical.compact .a { align-self: flex-end; }
+  .vertical #pop { align-self: flex-end; align-items: stretch; }
+  /* names on hover: shown while the mouse is over the window, and while the visible part narrows again (collapsing),
+     which clips them from the left. Hidden with no width, the name still sets the height of its row: the column
+     doesn't grow taller when the names appear. */
+  .names-hover:not(.expanded):not(.collapsing) .a { gap: 0; }
+  .names-hover:not(.expanded):not(.collapsing) .name { width: 0; overflow: hidden; }
+  /* the grip stays over the dots, as wide as the column without names (report): centered on the whole width it would
+     be clipped while the visible part narrows */
+  .names-hover #grip { align-self: flex-end; }
 </style>
 </head>
 <body>
@@ -48,10 +65,10 @@ const colors = { working: [255, 215, 0], done: [50, 205, 50], monitoring: [0, 19
 const rgb = state => `rgb(${colors[state] || [255, 0, 0]})`;
 // a darker yellow under the lollipop's white spiral, which would barely show on the plain one
 const headColor = state => state === "working" ? "rgb(230,176,0)" : rgb(state);
-const $ = id => document.getElementById(id), list = $("list"), bar = $("bar"), pop = $("pop"), wrap = $("wrap");
+const $ = id => document.getElementById(id), list = $("list"), bar = $("bar"), pop = $("pop"), wrap = $("wrap"), grip = $("grip");
 let dots = [], pressedKey = null, phase = false, last = { items: [], error: "" }, blinkTimer, lang = "en", lollipop = false;
 // While the mouse is over the window the entries don't move (frozen: keys and "⋯" membership as on screen).
-let frozen = [], popOpen = false, popTimer, side = "right";
+let frozen = [], popOpen = false, popTimer, side = "right", vertical = false;
 const text = (en, it) => lang === "it" ? it : en;
 
 function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
@@ -124,19 +141,38 @@ function render(msg) {
   report();
 }
 
-function report() {
-  const r = wrap.getBoundingClientRect();
-  wails.Events.Emit("size", { w: Math.ceil(r.width), h: Math.ceil(r.height), bar: Math.ceil(bar.getBoundingClientRect().height),
-    up: wrap.classList.contains("up") });
+// With names on mouseover the window is as wide as with the names and shows only its right part, visible wide: all
+// of it while the mouse is over the window, the width without names otherwise (also while they still show during the
+// narrowing). animate: the visible part gets there in 250 ms.
+function report(animate = false) {
+  const cls = document.body.classList, hover = cls.contains("names-hover");
+  const state = ["expanded", "collapsing"].filter(c => cls.contains(c));
+  let visible = 0;
+  grip.style.width = "";
+  if (hover) {
+    cls.remove(...state);
+    visible = Math.ceil(wrap.getBoundingClientRect().width);
+    grip.style.width = list.getBoundingClientRect().width + "px";
+    cls.add("expanded");
+  }
+  const r = wrap.getBoundingClientRect(), barH = bar.getBoundingClientRect().height;
+  if (hover) {
+    cls.remove("expanded");
+    cls.add(...state);
+    if (state.includes("expanded")) visible = Math.ceil(r.width);
+  }
+  wails.Events.Emit("size", { w: Math.ceil(r.width), h: Math.ceil(r.height), bar: Math.ceil(barH),
+    up: wrap.classList.contains("up"), animate, visible });
 }
 
-// The list opens toward the larger half of the screen; while it is closed the window top is the bar top.
+// The list opens toward the larger half of the screen, in the column always downward, under the "⋯"; while it is
+// closed the window top is the bar top.
 // ponytail: screenY/availTop not yet verified with several monitors nor on macOS
 function openPop() {
   clearTimeout(popTimer);
   if (popOpen) return;
   const top = window.screenY - (screen.availTop || 0), h = bar.getBoundingClientRect().height;
-  const up = top + h / 2 > screen.availHeight / 2;
+  const up = !vertical && top + h / 2 > screen.availHeight / 2;
   wrap.classList.toggle("up", up);
   pop.style.maxHeight = Math.max(0, (up ? top : screen.availHeight - top - h) - 8) + "px";
   popOpen = true;
@@ -146,19 +182,40 @@ function openPop() {
 
 function closeSoon() { clearTimeout(popTimer); popTimer = setTimeout(closePop, 300); }
 
-function closePop() {
+function closePop(quiet = false) {
   clearTimeout(popTimer);
   if (!popOpen) return;
   popOpen = false;
   pop.classList.remove("open");
-  report();
+  if (!quiet) report();
 }
 
 pop.onmouseenter = () => clearTimeout(popTimer);
 pop.onmouseleave = closeSoon;
+// "expanded" while the mouse is over the window; with names on hover the visible part widens to the left, animated.
+// Returns whether it reported a new size.
+let collapseTimer;
+function setExpanded(on) {
+  const cls = document.body.classList;
+  if (cls.contains("expanded") === on) return false;
+  clearTimeout(collapseTimer);
+  cls.toggle("expanded", on);
+  cls.remove("collapsing");
+  if (!cls.contains("names-hover")) return false;
+  if (!on) {
+    cls.add("collapsing");
+    collapseTimer = setTimeout(() => cls.remove("collapsing"), 300); // a bit past the animation
+  }
+  report(true);
+  return true;
+}
+
+document.addEventListener("mouseover", () => setExpanded(true));
 document.addEventListener("mouseout", e => {
   if (e.relatedTarget) return; // still inside the window
-  closePop();
+  const wasOpen = popOpen;
+  closePop(true);
+  if (!setExpanded(false) && wasOpen) report();
   setTimeout(() => render(last), 50); // apply the order held while the mouse was over, once :hover has cleared
 });
 
@@ -175,9 +232,12 @@ function click(it, a) {
 function applySettings(s) {
   lang = s.uiLang;
   document.body.classList.toggle("pill", s.shape === "pill");
-  document.body.classList.toggle("compact", s.compact);
+  vertical = s.orientation === "vertical";
+  document.body.classList.toggle("vertical", vertical);
+  document.body.classList.toggle("compact", s.names === "never");
+  document.body.classList.toggle("names-hover", vertical && s.names === "hover");
   lollipop = s.marker === "lollipop";
-  side = s.side;
+  side = vertical ? "left" : s.side; // the column lists the most important entries first, as "left" does
   document.body.classList.toggle("side-left", side === "left");
   document.documentElement.style.setProperty("--scale", s.scale / 100);
   clearInterval(blinkTimer);

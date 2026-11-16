@@ -27,10 +27,11 @@ type settings struct {
 	Shape          string    `json:"shape"`         // "rect" | "pill"
 	Marker         string    `json:"marker"`        // "dot" | "lollipop"
 	BlinkMs        int       `json:"blinkMs"`
-	Scale          int       `json:"scale"` // percent
-	Compact        bool      `json:"compact"`
-	Order          string    `json:"order"` // "alpha" | "recent"
-	Side           string    `json:"side"`  // where the most important entries go: "right" | "left"
+	Scale          int       `json:"scale"`       // percent
+	Orientation    string    `json:"orientation"` // "horizontal" | "vertical"
+	Names          string    `json:"names"`       // "always" | "never" (compact) | "hover" (vertical only)
+	Order          string    `json:"order"`       // "alpha" | "recent"
+	Side           string    `json:"side"`        // where the most important entries go: "right" | "left"
 	GroupByState   bool      `json:"groupByState"`
 	DoneMax        int       `json:"doneMax"` // idle entries outside the "⋯"; -1: all
 	AlwaysOnTop    bool      `json:"alwaysOnTop"`
@@ -39,15 +40,39 @@ type settings struct {
 	ClaudePrompted bool      `json:"claudePrompted"` // first-run question about the Claude Code hook already asked
 }
 
+// side is where the most important entries go in the order of the list: in the vertical column they go at the
+// top, that is first, as "left" in the bar.
+func (s settings) side() string {
+	if s.Orientation == "vertical" {
+		return "left"
+	}
+	return s.Side
+}
+
 func settingsFile() string {
 	d, _ := os.UserConfigDir()
 	return filepath.Join(d, "lollipop", "settings.json")
 }
 
 func loadSettings() settings {
-	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, Order: "alpha", Side: "right", DoneMax: -1, AlwaysOnTop: true, ShowWindow: true, CheckUpdates: true}
-	if raw, err := os.ReadFile(settingsFile()); err == nil {
+	raw, _ := os.ReadFile(settingsFile())
+	return parseSettings(raw)
+}
+
+// parseSettings fills the defaults with settings.json (nil: none). Up to v0.5 "compact": true stood for
+// "names": "never".
+func parseSettings(raw []byte) settings {
+	s := settings{Lang: "auto", Shape: "rect", Marker: "dot", BlinkMs: 500, Scale: 100, Orientation: "horizontal", Names: "always",
+		Order: "alpha", Side: "right", DoneMax: -1, AlwaysOnTop: true, ShowWindow: true, CheckUpdates: true}
+	var old struct {
+		Compact bool    `json:"compact"`
+		Names   *string `json:"names"`
+	}
+	if raw != nil && json.Unmarshal(raw, &old) == nil {
 		_ = json.Unmarshal(raw, &s)
+		if old.Compact && old.Names == nil {
+			s.Names = "never"
+		}
 	}
 	return s
 }
@@ -72,6 +97,14 @@ type ui struct {
 	shown bool
 
 	saveTimer *time.Timer // pending save after the window moved
+
+	// Names on mouseover: the window is always as wide as with the names, and only its right part, visible wide,
+	// shows and takes the mouse (setVisibleWidth). Resizing the window would leave the webview a few frames behind.
+	anim      sync.Mutex    // held by place and by each animation step; never on the UI thread
+	animGen   atomic.Uint64 // bumped by every place: a running animation stops at its next step
+	visible   int           // 0: the whole window shows (under anim)
+	animTo    int           // visible width animation animToGen is heading to (under anim)
+	animToGen uint64
 
 	checks      []check // checkable items of every menu, re-synced on each change
 	menus       []*application.Menu
@@ -144,7 +177,7 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 
 // settingKeys are the settings.json fields the settings window may change.
 var settingKeys = map[string]bool{"lang": true, "shape": true, "marker": true, "blinkMs": true, "scale": true,
-	"compact": true, "order": true, "side": true, "groupByState": true, "doneMax": true, "alwaysOnTop": true, "showWindow": true, "checkUpdates": true}
+	"orientation": true, "names": true, "order": true, "side": true, "groupByState": true, "doneMax": true, "alwaysOnTop": true, "showWindow": true, "checkUpdates": true}
 
 // set changes one setting by its JSON name, as sent by the settings window.
 func (u *ui) set(key string, value any) {
@@ -310,12 +343,18 @@ func (u *ui) moved() {
 
 // place resizes the window to its content keeping the right edge fixed, clamped to its screen, and the bar row
 // (height bar) still: with up the "⋯" list opens above it. The first time it restores the saved position (or top
-// right of the primary screen). Callers serialize it.
-func (u *ui) place(w, h, bar int, up bool) {
+// right of the primary screen). visible > 0 (names on mouseover) shows only that width from the right edge; with
+// animate it gets there in visibleAnim. Callers serialize it.
+func (u *ui) place(w, h, bar int, up, animate bool, visible int) {
 	s, first := u.get(), !u.isPlaced()
+	setBarWindow(u.win)
+	if visible > 0 && !visibleRegions { // the window takes the visible width, without animation
+		w, visible = visible, 0
+	}
 	b := u.win.Bounds()
 	u.mu.Lock()
 	right, top := b.X+u.width, b.Y+u.above
+	cur := application.Rect{X: b.X, Y: b.Y, Width: u.width, Height: b.Height}
 	u.mu.Unlock()
 	scr, _ := u.win.GetScreen()
 	if first {
@@ -333,22 +372,66 @@ func (u *ui) place(w, h, bar int, up bool) {
 			right, top = scr.WorkArea.X+scr.WorkArea.Width-80, scr.WorkArea.Y+40
 		}
 	}
-	above, width := 0, b.Width
+	if scr == nil {
+		u.mu.Lock()
+		u.above, u.width = 0, b.Width
+		u.placed = true
+		u.mu.Unlock()
+		u.syncVisible()
+		return
+	}
+	above := 0
 	if up && h > bar {
 		above = h - bar
 	}
-	if scr != nil {
-		right = min(right, scr.WorkArea.X+scr.WorkArea.Width)
-		u.win.SetBounds(application.Rect{X: max(scr.WorkArea.X, right-w), Y: top - above, Width: w, Height: h})
-		width = w
-	} else {
-		above = 0
+	right = min(right, scr.WorkArea.X+scr.WorkArea.Width)
+	r := application.Rect{X: max(scr.WorkArea.X, right-w), Y: top - above, Width: w, Height: h}
+	visible = min(visible, w)
+	u.anim.Lock()
+	if r == cur && u.animToGen == u.animGen.Load() && u.animTo == visible { // a re-render while animating
+		u.anim.Unlock()
+		u.syncVisible()
+		return
 	}
+	gen := u.animGen.Add(1)
+	if animate && !first && r == cur && visible > 0 && u.visible > 0 {
+		u.animTo, u.animToGen = visible, gen
+		go u.animate(gen, u.visible, visible, w)
+	} else {
+		u.win.SetBounds(r)
+		setVisibleWidth(visible, w)
+		u.visible = visible
+	}
+	u.anim.Unlock()
 	u.mu.Lock()
-	u.above, u.width = above, width
+	u.above, u.width = above, w
 	u.placed = true
 	u.mu.Unlock()
 	u.syncVisible()
+}
+
+const visibleAnim = 250 * time.Millisecond
+
+// animate takes the visible width from one value to the other in visibleAnim, easing out, unless a newer place
+// (another generation) takes over. The window keeps its size: nothing moves inside it.
+func (u *ui) animate(gen uint64, from, to, full int) {
+	start := time.Now()
+	for {
+		t := min(1, float64(time.Since(start))/float64(visibleAnim))
+		v := from + int(math.Round(float64(to-from)*(1-math.Pow(1-t, 3))))
+		u.anim.Lock()
+		if u.animGen.Load() != gen {
+			u.anim.Unlock()
+			return
+		}
+		setVisibleWidth(v, full)
+		u.visible = v
+		u.anim.Unlock()
+		if t == 1 {
+			return
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
 }
 
 func (u *ui) isPlaced() bool {
@@ -480,7 +563,7 @@ func (u *ui) emitStatus() {
 	u.mu.Lock()
 	up := u.update
 	u.mu.Unlock()
-	u.app.Event.Emit("status", map[string]any{"update": up[0], "updateURL": up[1],"claude": claudeHooksStatus().code(), "claudeSettings": claudeSettingsPath(),
+	u.app.Event.Emit("status", map[string]any{"update": up[0], "updateURL": up[1], "claude": claudeHooksStatus().code(), "claudeSettings": claudeSettingsPath(),
 		"autostart": on, "version": appVersion(), "translucent": translucentBackdrop(), "accent": []string{light, dark}})
 }
 

@@ -114,8 +114,8 @@ immediately and are saved:
 
 | Page | Settings |
 |---|---|
-| Appearance | **Shape** (rectangle or pill), **Indicator** (dot or lollipop head), **Size** and **Blinking speed** (sliders), **Compact view** (dots only, name in the tooltip) |
-| Entries | **Order**: alphabetical or last activity; **Most important entries**: on the right (the edge that stays still) or on the left; **Group by state**: from the most important, waiting, just finished, working, then the finished agents already seen; **Collapse idle agents** (finished and already seen): past the chosen number they go behind a `⋯ N` entry that lists them on mouseover |
+| Appearance | **Shape** (rectangle or pill), **Indicator** (dot or lollipop head), **Size** and **Blinking speed** (sliders), **Layout** (horizontal bar or vertical column), **Names**: always visible, hidden (dots only, name in the tooltip) or, in the vertical column, shown on mouseover |
+| Entries | **Order**: alphabetical or last activity; **Most important entries**: on the right (the edge that stays still) or on the left (in the vertical column always at the top); **Group by state**: from the most important, waiting, just finished, working, then the finished agents already seen; **Collapse idle agents** (finished and already seen): past the chosen number they go behind a `⋯ N` entry that lists them on mouseover |
 | General | **Always on top**, **Show window**, **Start lollipop at login** (a per-user `Run` registry entry on Windows, a LaunchAgent on macOS), **Check for updates on GitHub**, **Language** |
 | Integrations | **Claude Code**: the file lollipop adds its hook to (click to open it), status, **Install** (then **Repair**), **Remove** |
 | About | version and link to this repository |

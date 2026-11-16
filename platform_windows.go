@@ -3,9 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -28,6 +30,9 @@ var (
 	procFreeConsole   = kernel32.NewProc("FreeConsole")
 	procGetConsoleWnd = kernel32.NewProc("GetConsoleWindow")
 	procGetUILanguage = kernel32.NewProc("GetUserDefaultUILanguage")
+	procSetWindowRgn  = user32.NewProc("SetWindowRgn")
+	gdi32             = syscall.NewLazyDLL("gdi32.dll")
+	procRoundRectRgn  = gdi32.NewProc("CreateRoundRectRgn")
 )
 
 func dial(kind, endpoint string) (net.Conn, error) {
@@ -279,4 +284,65 @@ func setAutostart(on bool) error {
 		return err
 	}
 	return nil
+}
+
+// barHWND is the bar window once it exists (setBarWindow).
+var barHWND atomic.Uintptr
+
+func setBarWindow(win *application.WebviewWindow) { barHWND.Store(uintptr(win.NativeWindow())) }
+
+// barWndProc is called by Wails for every window message before its own handling; it acts on the bar only.
+//   - WM_GETMINMAXINFO: no minimum size. Windows kept the bar at least 42 px wide, wider than the narrow column,
+//     and the rest went past the right edge of the screen.
+//   - WM_MOVING: while the bar is dragged its right edge stays inside the work area of a monitor; it may cross onto
+//     a monitor further right, never past the last one. The message carries the proposed rectangle, in physical
+//     pixels, and the move follows the changed one.
+func barWndProc(hwnd uintptr, msg uint32, _, lParam uintptr) (uintptr, bool) {
+	if hwnd == 0 || hwnd != barHWND.Load() {
+		return 0, false
+	}
+	switch msg {
+	case w32.WM_GETMINMAXINFO:
+		mmi := *(**w32.MINMAXINFO)(unsafe.Pointer(&lParam)) // lParam holds a pointer from Windows; this form keeps go vet quiet
+		mmi.PtMinTrackSize = w32.POINT{X: 1, Y: 1}
+		return 0, true
+	case w32.WM_MOVING:
+		return clampMove(*(**w32.RECT)(unsafe.Pointer(&lParam)))
+	}
+	return 0, false
+}
+
+func clampMove(r *w32.RECT) (uintptr, bool) {
+	mi := w32.MONITORINFO{CbSize: uint32(unsafe.Sizeof(w32.MONITORINFO{}))}
+	m := w32.MonitorFromPoint(int(r.Right)-1, int(r.Top+r.Bottom)/2, w32.MONITOR_DEFAULTTONEAREST)
+	if !w32.GetMonitorInfo(m, &mi) || r.Right <= mi.RcWork.Right {
+		return 0, false
+	}
+	d := r.Right - mi.RcWork.Right
+	r.Left, r.Right = r.Left-d, r.Right-d
+	return 1, true
+}
+
+const visibleRegions = true
+
+// setVisibleWidth shows only the right part of the bar, visible wide out of full (in DIP), through a window region
+// with rounded corners like the ones Windows 11 draws; the rest neither shows nor takes the mouse. visible 0
+// removes the region. Windows draws no frame shadow around a window with a region.
+func setVisibleWidth(visible, full int) {
+	h := barHWND.Load()
+	if h == 0 {
+		return
+	}
+	if visible <= 0 || full <= 0 {
+		application.InvokeSync(func() { procSetWindowRgn.Call(h, 0, 1) })
+		return
+	}
+	rc := w32.GetWindowRect(w32.HWND(h))
+	pw, ph := int(rc.Right-rc.Left), int(rc.Bottom-rc.Top)
+	scale := float64(pw) / float64(full)
+	vw := min(pw, int(math.Round(float64(visible)*scale)))
+	d := int(math.Round(8 * scale)) // corner radius 4 DIP
+	rgn, _, _ := procRoundRectRgn.Call(uintptr(pw-vw), 0, uintptr(pw+1), uintptr(ph+1), uintptr(d), uintptr(d))
+	// on the UI thread: called from another one the window showed each change ~270 ms late; the system owns rgn
+	application.InvokeSync(func() { procSetWindowRgn.Call(h, rgn, 1) })
 }

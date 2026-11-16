@@ -102,13 +102,30 @@ function slider(key, min, max, step, format, reverse = false) {
   return el("div", { className: "range" }, r, out);
 }
 
+// "On mouseover" only in the column: in the bar the entries would slide under the mouse as the names appear.
+function names() {
+  const sel = select("names", [["always", ["Always visible", "Sempre visibili"]], ["never", ["Hidden (compact view)", "Nascosti (vista compatta)"]],
+    ["hover", ["On mouseover (vertical column)", "Al passaggio del mouse (colonna verticale)"]]]);
+  sel.options[2].disabled = s.orientation !== "vertical";
+  return sel;
+}
+
+// The column always lists the most important entries at the top.
+function side() {
+  const sel = select("side", [["right", ["On the right", "A destra"]], ["left", ["On the left", "A sinistra"]]]);
+  sel.disabled = s.orientation === "vertical";
+  return sel;
+}
+
 const pages = {
   look: [["Appearance", "Aspetto"], () => [
     row(["Shape", "Forma"], select("shape", [["rect", ["Rectangle", "Rettangolo"]], ["pill", ["Pill", "Capsula"]]])),
     row(["Indicator", "Indicatore"], select("marker", [["dot", ["Dot", "Pallino"]], ["lollipop", ["Lollipop", "Lollipop"]]])),
     row(["Size", "Dimensione"], slider("scale", 70, 160, 5, v => v + "%")),
     row(["Blinking speed", "Velocità del lampeggio"], slider("blinkMs", 200, 1500, 50, v => v + " ms", true)),
-    row(["Compact view", "Vista compatta"], flag("compact")),
+    row(["Layout", "Disposizione"], select("orientation", [["horizontal", ["Horizontal bar", "Barra orizzontale"]],
+      ["vertical", ["Vertical column", "Colonna verticale"]]])),
+    row(["Names", "Nomi"], names()),
   ]],
   entries: [["Entries", "Voci"], () => {
     const collapse = s.doneMax >= 0;
@@ -116,7 +133,7 @@ const pages = {
     n.onchange = () => { lastDone = Math.max(0, Math.min(99, Math.round(Number(n.value) || 0))); send("doneMax", lastDone); };
     return [
       row(["Order", "Ordine"], select("order", [["alpha", ["Alphabetical", "Alfabetico"]], ["recent", ["Last activity", "Ultima attività"]]])),
-      row(["Most important entries", "Voci più importanti"], select("side", [["right", ["On the right", "A destra"]], ["left", ["On the left", "A sinistra"]]])),
+      row(["Most important entries", "Voci più importanti"], side(), s.orientation === "vertical" ? "off" : ""),
       row(["Group by state", "Raggruppa per stato"], flag("groupByState")),
       row(["Collapse idle agents", "Raccogli gli agenti idle"], check(collapse, v => send("doneMax", v ? lastDone : -1))),
       row(["Keep visible", "Lasciane visibili"], n, "sub" + (collapse ? "" : " off")),

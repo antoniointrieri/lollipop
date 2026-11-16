@@ -162,3 +162,13 @@ func setAutostart(on bool) error {
 	}
 	return writeAtomic(launchAgentPath(), []byte(launchAgent()))
 }
+
+// Windows only: macOS leaves the drag alone.
+func setBarWindow(*application.WebviewWindow) {}
+
+var barWndProc func(hwnd uintptr, msg uint32, wParam, lParam uintptr) (uintptr, bool)
+
+// No window regions: with names on mouseover the window takes the visible width, without animation.
+const visibleRegions = false
+
+func setVisibleWidth(visible, full int) {}

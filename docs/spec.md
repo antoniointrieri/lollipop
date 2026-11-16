@@ -471,8 +471,8 @@ torna subito in barra, e un agente nuovo compare a sinistra. Quando il mouse esc
 
 | Pagina | Contenuto |
 |---|---|
-| Aspetto | Forma, Indicatore, Dimensione, Velocità del lampeggio, Vista compatta |
-| Voci | Ordine, Voci più importanti (a destra / a sinistra), Raggruppa per stato, Raccogli gli agenti idle + quanti lasciarne visibili (0-99) |
+| Aspetto | Forma, Indicatore, Dimensione, Velocità del lampeggio, Disposizione, Nomi (§16; prima: Vista compatta) |
+| Voci | Ordine, Voci più importanti (a destra / a sinistra; spenta con la colonna verticale), Raggruppa per stato, Raccogli gli agenti idle + quanti lasciarne visibili (0-99) |
 | Generale | Sempre in primo piano, Mostra finestra, Avvia lollipop all'accesso, Cerca aggiornamenti su GitHub, Lingua |
 | Integrazioni | una sezione per agente, per ora solo **Claude Code**: "lollipop aggiunge un hook a `settings.json`" con il percorso cliccabile (lo apre con l'app predefinita, o apre la cartella se il file non c'è), stato, Installa/Ripara, Rimuovi |
 | Informazioni | versione (dal tag stampato da `go build`), licenza, link al repo |
@@ -498,3 +498,70 @@ torna subito in barra, e un agente nuovo compare a sinistra. Quando il mouse esc
   **Informazioni**. Spegnere l'impostazione toglie subito l'avviso.
 - Un errore di rete non mostra nulla: si riprova il giorno dopo.
 - `lollipop -once` stampa anche versione e ultima release.
+
+## 16. v0.6: colonna verticale e nomi al passaggio del mouse
+
+> Stato: **approvata** (2026-11-16).
+
+Nella pagina **Aspetto**:
+
+- **Disposizione**: Barra orizzontale (predefinita) / Colonna verticale.
+- **Nomi**: Sempre visibili (predefinito) / Nascosti (vista compatta) / Al passaggio del mouse. L'ultima vale solo
+  nella colonna: nella barra le voci scivolerebbero di lato sotto il mouse mentre i nomi compaiono, e il clic
+  colpirebbe la voce sbagliata. Con la barra orizzontale l'opzione è disattivata e, se era scelta, i nomi restano
+  visibili.
+
+In `settings.json`: `orientation` (`horizontal` | `vertical`) e `names` (`always` | `never` | `hover`). `names`
+sostituisce `compact`: un `settings.json` con `"compact": true` e senza `names` vale `"names": "never"`.
+
+### Colonna verticale
+
+- Maniglia in alto, poi le voci una sotto l'altra, le più importanti in alto (in testa alla lista, come "a sinistra"
+  nella barra). L'impostazione **Voci più importanti** è disattivata. L'ordine alfabetico si legge dall'alto in
+  basso; gli agenti nuovi compaiono in fondo.
+- Le voci hanno tutte la larghezza della più larga. Il pallino sta a destra e il nome alla sua sinistra, allineato a
+  destra: il bordo destro della finestra resta fermo come nella barra, quindi i pallini non si spostano quando la
+  colonna si allarga.
+- L'ellissi `⋯ K` sta in fondo alla colonna e la sua lista si apre sempre sotto, attaccata al `⋯`, alta al massimo
+  lo spazio fino al fondo dello schermo (poi scorre). Si chiude come nella barra (§13).
+
+### Nomi al passaggio del mouse
+
+- A mouse fuori dalla finestra si vede solo la colonna degli indicatori; il nome resta nel tooltip.
+- Quando il mouse entra nella finestra compaiono i nomi di tutte le voci e la colonna si allarga verso sinistra;
+  quando esce i nomi spariscono e la colonna torna stretta. Le voci restano ferme sotto il mouse (§13).
+- La parte visibile si allarga e si restringe in 250 ms con un'animazione che rallenta verso la fine (ease-out
+  cubica), a passi di circa 15 ms; ogni nuovo ridimensionamento ferma quello in corso, e un ridisegno che riporta la
+  dimensione verso cui l'animazione sta già andando non la interrompe.
+- La finestra resta sempre larga quanto la colonna con i nomi; su Windows una region di finestra (`SetWindowRgn`) ne
+  mostra solo la parte destra, che è anche l'unica a ricevere il mouse. L'animazione cambia solo la region: la
+  finestra e la WebView non si ridimensionano, quindi niente si sposta. Ridimensionare la finestra a ogni passo
+  lasciava la WebView indietro di qualche frame (pallini che scivolavano e tagliati) e lasciava intravedere i pulsanti
+  della barra del titolo nascosta.
+- La region si applica dal thread della UI (`InvokeSync`): da un altro thread ogni cambio compariva con ~270 ms di
+  ritardo.
+- Allargando, i nomi compaiono già tutti e la region li scopre da destra; restringendo restano visibili e la region
+  li copre da sinistra, poi spariscono. Nascosto, il nome ha larghezza zero ma tiene l'altezza della riga, così la
+  colonna non cambia altezza. La maniglia sta sopra la colonna dei pallini, larga quanto la colonna senza nomi.
+- Con la region Windows non disegna l'ombra né gli angoli arrotondati della finestra: la region ha angoli arrotondati
+  di 4 DIP, simili a quelli di Windows 11, e l'ombra manca. Vale solo con i nomi al passaggio del mouse.
+- Su macOS non c'è la region: la finestra prende la larghezza visibile, senza animazione.
+
+### Finestra della barra su Windows
+
+- Niente pulsanti della barra del titolo (`ButtonHidden`): si vedevano durante i ridimensionamenti, la X rossa sotto
+  il mouse.
+- Nessuna dimensione minima (`WM_GETMINMAXINFO`): Windows teneva la finestra larga almeno 42 px, più della colonna
+  stretta, e il resto finiva oltre il bordo destro dello schermo.
+
+### Bordo destro dello schermo
+
+Trascinando la finestra (barra o colonna), il suo bordo destro si ferma al bordo destro dell'area di lavoro del
+monitor: può passare su un monitor più a destra, mai oltre l'ultimo. Su Windows si corregge il rettangolo proposto
+da `WM_MOVING` (tramite `WndProcInterceptor` di Wails); su macOS il trascinamento resta libero e la finestra torna
+dentro lo schermo al ridimensionamento successivo, come prima.
+
+### Limiti
+
+- Si tiene fermo solo il bordo destro: con la colonna sul bordo sinistro dello schermo la finestra, allargandosi, non
+  può uscire dallo schermo e i pallini si spostano a destra. Un ancoraggio al bordo sinistro è rimandato.
