@@ -129,8 +129,9 @@ func (c *orcaClient) poll() (snapshot, error) {
 	if err := c.call("terminal.list", map[string]bool{"includeVisualLayouts": true}, &tl); err != nil {
 		return snapshot{}, err
 	}
-	// worktree.ps doesn't expose workingMode; Orca writes it here ("monitoring" = turn done, background shells alive).
-	// ponytail: internal Orca file; if its format changes only the blue state is lost
+	// Orca up to 1.4.255 doesn't expose workingMode in worktree.ps and writes it here ("monitoring" = turn done,
+	// background shells alive); later versions moved this file to SQLite but put workingMode in worktree.ps.
+	// ponytail: internal Orca file, read only for older Orca versions
 	var hooks lastStatus
 	if raw, err := os.ReadFile(filepath.Join(orcaDir(), "agent-hooks", "last-status.json")); err == nil {
 		_ = json.Unmarshal(raw, &hooks)

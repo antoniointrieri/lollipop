@@ -17,7 +17,7 @@ func TestBuildSnapshot(t *testing.T) {
 	must(`{"worktrees":[
 		{"worktreeId":"w1","repo":"zeta","isMainWorktree":true,"isActive":true,"agents":[{"paneKey":"t1:l1","state":"working"}]},
 		{"worktreeId":"w2","repo":"alfa","displayName":"feat","isMainWorktree":false,"agents":[
-			{"paneKey":"t2:l2","state":"done"},{"paneKey":"t9:l9","state":"done"},
+			{"paneKey":"t2:l2","state":"working","workingMode":"monitoring"},{"paneKey":"t9:l9","state":"done"},
 			{"paneKey":"chat:l3","state":"waiting","conversationName":"Chat","structuredHostOwned":true}]}]}`, &wt)
 	must(`{"terminals":[{"handle":"h1","tabId":"t1","leafId":"l1","title":"✳ Claude Code"},{"handle":"h2","tabId":"t2","leafId":"l2","title":"plain"}],
 		"visualLayouts":[{"worktreeId":"w1","root":{"activeTabId":"t1","tabs":[{"tabId":"t1","activeLeafId":"l1"}]}}]}`, &tl)
@@ -31,7 +31,7 @@ func TestBuildSnapshot(t *testing.T) {
 		a.State != "waiting" || a.Title != "Chat" {
 		t.Errorf("chat: %+v", a)
 	}
-	if a := s.Agents[1]; a.Label != "alfa/feat" || a.Handle != "h2" || a.State != "done" || a.Worktree != "" {
+	if a := s.Agents[1]; a.Label != "alfa/feat" || a.Handle != "h2" || a.State != "monitoring" || a.Worktree != "" {
 		t.Errorf("worktree secondario: %+v", a)
 	}
 	if a := s.Agents[2]; a.Label != "zeta" || a.State != "monitoring" || a.Title != "Claude Code" {

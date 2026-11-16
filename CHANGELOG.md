@@ -11,6 +11,9 @@ text of its GitHub Release.
 - Orca agents in **chat** mode: clicking one now opens its chat tab in Orca. Before, they were picked up as plain
   Claude Code sessions, and the click only brought Orca to the front. They now carry the worktree label and the
   chat name like terminal agents.
+- With Orca 1.4.259 and later, agents whose turn is done but with background shells still running were shown
+  yellow (working) instead of blue (monitoring): Orca moved the file lollipop read this from. lollipop now reads
+  it from `worktree.ps`, falling back to the old file for older Orca versions.
 
 ## [0.5.0] - 2026-09-28
 

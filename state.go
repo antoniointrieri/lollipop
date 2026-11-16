@@ -15,6 +15,7 @@ type worktreePS struct {
 		IsMainWorktree, IsActive      bool
 		Agents                        []struct {
 			PaneKey, State, ConversationName string
+			WorkingMode                      string // "monitoring" = turn done, background shells alive
 			StructuredHostOwned              bool // chat tab live in this Orca (no terminal behind it)
 		}
 	}
@@ -72,7 +73,11 @@ func buildSnapshot(wt worktreePS, tl terminalList, hooks lastStatus) snapshot {
 			} else { // "done" without a terminal or a live chat is a closed session
 				continue
 			}
-			if ag.State == "working" && hooks.Entries[a.PaneKey].Payload.WorkingMode == "monitoring" {
+			mode := a.WorkingMode
+			if mode == "" {
+				mode = hooks.Entries[a.PaneKey].Payload.WorkingMode
+			}
+			if ag.State == "working" && mode == "monitoring" {
 				ag.State = "monitoring"
 			}
 			s.Agents = append(s.Agents, ag)
