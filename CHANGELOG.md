@@ -6,6 +6,8 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-16
+
 ### Fixed
 
 - Orca agents in **chat** mode: clicking one now opens its chat tab in Orca. Before, they were picked up as plain
@@ -14,6 +16,8 @@ text of its GitHub Release.
 - With Orca 1.4.259 and later, agents whose turn is done but with background shells still running were shown
   yellow (working) instead of blue (monitoring): Orca moved the file lollipop read this from. lollipop now reads
   it from `worktree.ps`, falling back to the old file for older Orca versions.
+- The window position is saved as soon as the window stops moving, so closing lollipop other than with "Quit"
+  (logoff, Task Manager, a new exe) no longer loses it. The saved position may also sit over the taskbar.
 
 ## [0.5.0] - 2026-09-28
 
@@ -110,7 +114,8 @@ First release: a Go + Wails v3 port of the PowerShell proof of concept.
   top, show window. Window position and settings are remembered.
 - Windows build and experimental macOS build (universal binary) from GitHub Actions.
 
-[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.5.1
 [0.5.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.4.0
 [0.3.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.3.0
