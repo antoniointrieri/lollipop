@@ -16,13 +16,16 @@ type worktreePS struct {
 		Agents                        []struct {
 			PaneKey, State, ConversationName string
 			WorkingMode                      string // "monitoring" = turn done, background shells alive
-			StructuredHostOwned              bool // chat tab live in this Orca (no terminal behind it)
+			StructuredHostOwned              bool   // chat tab live in this Orca (no terminal behind it)
 		}
 	}
 }
 
 type terminalList struct {
-	Terminals     []struct{ Handle, TabID, LeafID, Title string }
+	Terminals []struct {
+		Handle, TabID, LeafID, Title string
+		Connected                    bool // false while the worktree sleeps: the tab stays, without a process behind it
+	}
 	VisualLayouts []struct {
 		WorktreeID string
 		Root       struct {
@@ -52,7 +55,9 @@ type snapshot struct {
 func buildSnapshot(wt worktreePS, tl terminalList, hooks lastStatus) snapshot {
 	terms := map[string]int{}
 	for i, t := range tl.Terminals {
-		terms[t.TabID+":"+t.LeafID] = i
+		if t.Connected {
+			terms[t.TabID+":"+t.LeafID] = i
+		}
 	}
 	var s snapshot
 	activeWT := ""
@@ -70,7 +75,7 @@ func buildSnapshot(wt worktreePS, tl terminalList, hooks lastStatus) snapshot {
 				ag.Handle, ag.Title = tl.Terminals[i].Handle, stripGlyph(tl.Terminals[i].Title)
 			} else if a.StructuredHostOwned {
 				ag.Worktree, ag.Title = w.WorktreeID, a.ConversationName
-			} else { // "done" without a terminal or a live chat is a closed session
+			} else { // "done" without a live terminal or chat is a closed session, or one in a sleeping worktree
 				continue
 			}
 			mode := a.WorkingMode

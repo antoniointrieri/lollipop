@@ -18,13 +18,17 @@ func TestBuildSnapshot(t *testing.T) {
 		{"worktreeId":"w1","repo":"zeta","isMainWorktree":true,"isActive":true,"agents":[{"paneKey":"t1:l1","state":"working"}]},
 		{"worktreeId":"w2","repo":"alfa","displayName":"feat","isMainWorktree":false,"agents":[
 			{"paneKey":"t2:l2","state":"working","workingMode":"monitoring"},{"paneKey":"t9:l9","state":"done"},
+			{"paneKey":"t8:l8","state":"done"},
 			{"paneKey":"chat:l3","state":"waiting","conversationName":"Chat","structuredHostOwned":true}]}]}`, &wt)
-	must(`{"terminals":[{"handle":"h1","tabId":"t1","leafId":"l1","title":"✳ Claude Code"},{"handle":"h2","tabId":"t2","leafId":"l2","title":"plain"}],
+	must(`{"terminals":[{"handle":"h1","tabId":"t1","leafId":"l1","title":"✳ Claude Code","connected":true},
+		{"handle":"h2","tabId":"t2","leafId":"l2","title":"plain","connected":true},
+		{"handle":"h8","tabId":"t8","leafId":"l8","title":"asleep","connected":false}],
 		"visualLayouts":[{"worktreeId":"w1","root":{"activeTabId":"t1","tabs":[{"tabId":"t1","activeLeafId":"l1"}]}}]}`, &tl)
 	must(`{"entries":{"t1:l1":{"payload":{"workingMode":"monitoring"}}}}`, &hooks)
 
 	s := buildSnapshot(wt, tl, hooks)
-	if len(s.Agents) != 3 { // t9:l9 has no terminal and isn't a live chat: closed session
+	// t9:l9 has no terminal and isn't a live chat: closed session; t8:l8's terminal is disconnected: sleeping worktree
+	if len(s.Agents) != 3 {
 		t.Fatalf("agenti: %+v", s.Agents)
 	}
 	if a := s.Agents[0]; a.Label != "alfa/feat" || a.Key != "chat:l3" || a.Handle != "" || a.Worktree != "w2" ||

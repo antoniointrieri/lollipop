@@ -18,6 +18,7 @@ text of its GitHub Release.
 
 ### Fixed
 
+- Agents of an Orca worktree put to sleep no longer show: Orca keeps their tabs, without a process behind them.
 - Windows: a bar narrower than 42 px (the vertical column, the empty indicator) was widened by Windows and went past
   the right edge of the screen.
 
