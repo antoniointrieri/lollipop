@@ -6,6 +6,8 @@ text of its GitHub Release.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-25
+
 ### Added
 
 - **Vertical column** layout (Settings, Appearance, Layout): entries stacked under the grip, the most important at
@@ -16,16 +18,16 @@ text of its GitHub Release.
 - Dragging the window stops its right edge at the right edge of the screen (Windows): it can still move onto a
   monitor further right.
 
+### Changed
+
+- The **Compact view** checkbox becomes the **Names** setting (always visible, hidden, on mouseover). An existing
+  compact view carries over as "hidden".
+
 ### Fixed
 
 - Agents of an Orca worktree put to sleep no longer show: Orca keeps their tabs, without a process behind them.
 - Windows: a bar narrower than 42 px (the vertical column, the empty indicator) was widened by Windows and went past
   the right edge of the screen.
-
-### Changed
-
-- The **Compact view** checkbox becomes the **Names** setting (always visible, hidden, on mouseover). An existing
-  compact view carries over as "hidden".
 
 ## [0.5.1] - 2026-11-16
 
@@ -135,7 +137,8 @@ First release: a Go + Wails v3 port of the PowerShell proof of concept.
   top, show window. Window position and settings are remembered.
 - Windows build and experimental macOS build (universal binary) from GitHub Actions.
 
-[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/antoniointrieri/lollipop/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.6.0
 [0.5.1]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.5.1
 [0.5.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/antoniointrieri/lollipop/releases/tag/v0.4.0
