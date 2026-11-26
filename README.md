@@ -159,6 +159,29 @@ Once a day lollipop asks GitHub for the latest release. When a newer one is out,
 **About** page say so, with a link to the release page: download it from there. Nothing is downloaded or installed
 by itself. Turn it off in **General**; builds made from source never check.
 
+## Phone
+
+A companion Android app shows the same agents on your phone, as a grid of colored squares in the style of a Stream
+Deck; tapping a square brings that agent to the front on the PC. When an agent starts waiting for you it turns the
+screen on and draws the grid over the lock screen. The state also shows in an Android Live Update (the kind of
+notification Maps uses for navigation), on the lock screen and on the always-on display.
+
+Phone and PC must be on the same Wi-Fi network. To enable it:
+
+1. **Settings → Phone → Show agents on your phone**: lollipop opens a local server on port 47600 and shows the
+   address (`192.168.x.y:47600`) and a token.
+2. Open the port in the firewall, once, from a terminal running as administrator:
+
+   ```
+   netsh advfirewall firewall add rule name="lollipop phone" dir=in action=allow protocol=TCP localport=47600 remoteip=LocalSubnet
+   ```
+
+   `remoteip=LocalSubnet` accepts connections from the local network only; the token authenticates the connection.
+3. In the Android app, enter the address and token and tap Connect.
+
+The phone talks to lollipop over HTTP on the LAN, so the agent state never leaves the local network. The app lives
+in [`android/`](android/); see its README for how to build and install it.
+
 ## How it works
 
 **Orca**: lollipop talks to Orca's local runtime through the same named pipe the `orca` CLI uses (a Unix socket on macOS),

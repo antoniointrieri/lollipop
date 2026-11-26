@@ -158,6 +158,29 @@ Una volta al giorno lollipop chiede a GitHub l'ultima release. Quando ne esce un
 il tooltip dell'icona e la pagina **Informazioni**, con il link alla pagina della release da cui scaricarla. Non
 scarica né installa nulla da solo. Si disattiva in **Generale**; le build compilate dai sorgenti non controllano.
 
+## Telefono
+
+Un'app Android companion mostra gli stessi agenti sul telefono, come una griglia di quadrati colorati sul modello
+di uno Stream Deck; al tocco di un quadrato porta davanti quell'agente sul PC. Quando un agente passa ad "aspetta
+te" accende lo schermo e disegna la griglia sopra la schermata di blocco. Lo stato resta visibile anche nella Live
+Update di Android (la notifica che Maps usa per la navigazione), sulla schermata di blocco e sull'always-on display.
+
+Telefono e PC devono stare sulla stessa rete Wi-Fi. Attivazione:
+
+1. **Impostazioni → Telefono → Mostra gli agenti sul telefono**: lollipop apre un server locale sulla porta 47600
+   e mostra l'indirizzo (`192.168.x.y:47600`) e un token.
+2. Apri la porta nel firewall, una volta sola, da un terminale come amministratore:
+
+   ```
+   netsh advfirewall firewall add rule name="lollipop phone" dir=in action=allow protocol=TCP localport=47600 remoteip=LocalSubnet
+   ```
+
+   `remoteip=LocalSubnet` accetta solo connessioni dalla rete locale; il token autentica la connessione.
+3. Nell'app Android, inserisci indirizzo e token e tocca Connetti.
+
+Il telefono parla con lollipop via HTTP sulla LAN, quindi lo stato degli agenti non esce dalla rete locale.
+L'app sta in [`android/`](android/); vedi il suo README per compilazione e installazione.
+
 ## Come funziona
 
 **Orca**: lollipop parla con il runtime locale di Orca attraverso la stessa named pipe che usa la CLI `orca` (socket Unix

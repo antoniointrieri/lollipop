@@ -163,6 +163,21 @@ const pages = {
           textContent: t(["Remove", "Rimuovi"]) })),
     ];
   }],
+  phone: [["Phone", "Telefono"], () => {
+    const rows = [
+      row(["Show agents on your phone", "Mostra gli agenti sul telefono"], flag("remoteOn")),
+      el("div", { className: "note" }, t(["The lollipop Android app shows your agents and brings one to the front when you tap it, over the same Wi-Fi. Enter the address and token below to pair it.",
+        "L'app Android di lollipop mostra gli agenti e ne porta davanti uno quando lo tocchi, sulla stessa rete Wi-Fi. Inserisci indirizzo e token qui sotto per accoppiarla."])),
+    ];
+    if (s.remoteOn) {
+      rows.push(
+        el("div", { className: "row" }, el("span", { className: "label" }, t(["Address", "Indirizzo"])),
+          el("code", {}, st.remoteAddr || t(["no network found", "nessuna rete trovata"]))),
+        el("div", { className: "row" }, el("span", { className: "label" }, "Token"),
+          el("code", {}, s.remoteToken || "…")));
+    }
+    return rows;
+  }],
   about: [["About", "Informazioni"], () => [
     el("div", { className: "row" }, el("span", { className: "label" }, t(["Version", "Versione"])), el("span", {}, st.version)),
     st.update ? el("div", { className: "row" }, el("span", { className: "label" }, t(["Update available", "Aggiornamento disponibile"])),

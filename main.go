@@ -90,6 +90,35 @@ func main() {
 	lastSig := ""
 	agents := map[string]agent{}
 
+	// focusAgent brings the agent's terminal or window to the front: the action of a click in the bar, also
+	// reachable from the Android companion over the LAN. A key the current snapshot no longer has is ignored.
+	focusAgent := func(key string) {
+		tr.seen(key)
+		mu.Lock()
+		a := agents[key]
+		mu.Unlock()
+		if a.Key == "" {
+			return
+		}
+		if a.Host != nil {
+			activateHost(*a.Host)
+			if link := sessionLink(*a.Host); link != "" {
+				time.Sleep(150 * time.Millisecond) // lets VS Code register which of its windows is focused
+				_ = app.Browser.OpenURL(link)
+			}
+			return
+		}
+		activateOrca(orca.orcaPID())
+		if a.Worktree != "" {
+			if err := orca.revealPane(a.Worktree, a.Key); err != nil {
+				log.Println("terminal.reveal:", err)
+			}
+		} else if err := orca.focusTerminal(a.Handle); err != nil {
+			log.Println("terminal.focus:", err)
+		}
+	}
+	remote := newRemoteServer(focusAgent)
+
 	app.Event.On("ready", func(*application.CustomEvent) {
 		u.emitSettings(u.get())
 		mu.Lock()
@@ -111,26 +140,7 @@ func main() {
 	app.Event.On("focus", func(e *application.CustomEvent) {
 		m, _ := e.Data.(map[string]any)
 		key, _ := m["key"].(string)
-		tr.seen(key)
-		mu.Lock()
-		a := agents[key]
-		mu.Unlock()
-		if a.Host != nil {
-			activateHost(*a.Host)
-			if link := sessionLink(*a.Host); link != "" {
-				time.Sleep(150 * time.Millisecond) // lets VS Code register which of its windows is focused
-				_ = app.Browser.OpenURL(link)
-			}
-			return
-		}
-		activateOrca(orca.orcaPID())
-		if a.Worktree != "" {
-			if err := orca.revealPane(a.Worktree, a.Key); err != nil {
-				log.Println("terminal.reveal:", err)
-			}
-		} else if err := orca.focusTerminal(a.Handle); err != nil {
-			log.Println("terminal.focus:", err)
-		}
+		focusAgent(key)
 	})
 
 	// settings window
@@ -189,6 +199,17 @@ func main() {
 				errMsg = err.Error()
 			}
 			u.updateTray(items, errMsg)
+			// Reconcile the companion server with the setting every poll, so toggling it takes effect at once.
+			if set.RemoteOn {
+				if set.RemoteToken == "" {
+					u.change(func(s *settings) { s.RemoteToken = newToken() })
+					set = u.get()
+				}
+				remote.setToken(set.RemoteToken)
+				remote.ensureStarted()
+			} else {
+				remote.ensureStopped()
+			}
 			msg := map[string]any{"items": items, "error": errMsg}
 			sig, _ := json.Marshal(msg)
 			mu.Lock()
@@ -201,6 +222,9 @@ func main() {
 			mu.Unlock()
 			if changed {
 				app.Event.Emit("agents", msg)
+				if set.RemoteOn {
+					remote.publish(items)
+				}
 			}
 		}
 	}()

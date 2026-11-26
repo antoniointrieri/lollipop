@@ -38,6 +38,8 @@ type settings struct {
 	ShowWindow     bool      `json:"showWindow"`
 	CheckUpdates   bool      `json:"checkUpdates"`
 	ClaudePrompted bool      `json:"claudePrompted"` // first-run question about the Claude Code hook already asked
+	RemoteOn       bool      `json:"remoteOn"`       // serve the agent state to the Android companion over the LAN
+	RemoteToken    string    `json:"remoteToken"`    // generated on first enable; the phone authenticates with it
 }
 
 // side is where the most important entries go in the order of the list: in the vertical column they go at the
@@ -177,7 +179,7 @@ func (u *ui) buildMenu(m *application.Menu) *application.Menu {
 
 // settingKeys are the settings.json fields the settings window may change.
 var settingKeys = map[string]bool{"lang": true, "shape": true, "marker": true, "blinkMs": true, "scale": true,
-	"orientation": true, "names": true, "order": true, "side": true, "groupByState": true, "doneMax": true, "alwaysOnTop": true, "showWindow": true, "checkUpdates": true}
+	"orientation": true, "names": true, "order": true, "side": true, "groupByState": true, "doneMax": true, "alwaysOnTop": true, "showWindow": true, "checkUpdates": true, "remoteOn": true}
 
 // set changes one setting by its JSON name, as sent by the settings window.
 func (u *ui) set(key string, value any) {
@@ -564,7 +566,7 @@ func (u *ui) emitStatus() {
 	up := u.update
 	u.mu.Unlock()
 	u.app.Event.Emit("status", map[string]any{"update": up[0], "updateURL": up[1], "claude": claudeHooksStatus().code(), "claudeSettings": claudeSettingsPath(),
-		"autostart": on, "version": appVersion(), "translucent": translucentBackdrop(), "accent": []string{light, dark}})
+		"autostart": on, "version": appVersion(), "translucent": translucentBackdrop(), "accent": []string{light, dark}, "remoteAddr": lanAddress()})
 }
 
 // appVersion is the tag of a release build (v0.4.0), else the version stamped by go build (a pseudo-version).
