@@ -52,6 +52,8 @@
   .note { color: var(--text2); line-height: 1.45; margin: 4px 2px 12px; }
   .btns { display: flex; gap: 8px; margin-top: 12px; }
   code { font: 12px Consolas, ui-monospace, monospace; }
+  .qr { margin: 4px 0 8px; }
+  .qr img { display: block; width: 200px; height: 200px; border-radius: 6px; }
   a { color: var(--accent); cursor: pointer; }
 </style>
 </head>
@@ -166,13 +168,14 @@ const pages = {
   phone: [["Phone", "Telefono"], () => {
     const rows = [
       row(["Show agents on your phone", "Mostra gli agenti sul telefono"], flag("remoteOn")),
-      el("div", { className: "note" }, t(["The lollipop Android app shows your agents and brings one to the front when you tap it, over the same Wi-Fi. Enter the address and token below to pair it.",
-        "L'app Android di lollipop mostra gli agenti e ne porta davanti uno quando lo tocchi, sulla stessa rete Wi-Fi. Inserisci indirizzo e token qui sotto per accoppiarla."])),
+      el("div", { className: "note" }, t(["The lollipop Android app shows your agents and brings one to the front when you tap it, over the same Wi-Fi. To pair it, tap Scansiona QR in the app and frame the code below, or enter the address and token.",
+        "L'app Android di lollipop mostra gli agenti e ne porta davanti uno quando lo tocchi, sulla stessa rete Wi-Fi. Per accoppiarla, tocca Scansiona QR nell'app e inquadra il codice qui sotto, oppure inserisci indirizzo e token."])),
     ];
     if (s.remoteOn) {
+      if (st.remoteQR) rows.push(el("div", { className: "qr" }, el("img", { src: st.remoteQR, alt: "QR" })));
       rows.push(
         el("div", { className: "row" }, el("span", { className: "label" }, t(["Address", "Indirizzo"])),
-          el("code", {}, st.remoteAddr || t(["no network found", "nessuna rete trovata"]))),
+          el("code", {}, st.remoteAddrs?.length ? st.remoteAddrs.join(", ") : t(["no network found", "nessuna rete trovata"]))),
         el("div", { className: "row" }, el("span", { className: "label" }, "Token"),
           el("code", {}, s.remoteToken || "…")));
     }

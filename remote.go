@@ -7,14 +7,19 @@ package main
 import (
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
+
+	"rsc.io/qr"
 )
 
 const remotePort = 47600
@@ -204,21 +209,80 @@ func (r *remoteServer) handler() http.Handler {
 	return mux
 }
 
-// lanAddress returns a "192.168.x.y:port" the phone can reach, or "" if no private IPv4 is found.
-func lanAddress() string {
-	addrs, err := net.InterfaceAddrs()
+// maxLANAddresses caps the addresses in the pairing QR code, which grows denser with each one.
+const maxLANAddresses = 4
+
+// lanAddresses lists the "192.168.x.y:port" the phone may reach, best guess first: the address of the interface
+// that holds the default route, then the private IPv4 addresses of the other interfaces that are up. Virtual
+// adapters (WSL, Hyper-V, VPN) have private addresses too, and a VPN can hold the default route: the pairing QR
+// code carries them all and the app keeps the first that answers.
+func lanAddresses() []string {
+	var ips []net.IP
+	add := func(ip net.IP) {
+		ip = ip.To4()
+		if ip == nil || !ip.IsPrivate() || len(ips) == maxLANAddresses {
+			return
+		}
+		for _, x := range ips {
+			if x.Equal(ip) {
+				return
+			}
+		}
+		ips = append(ips, ip)
+	}
+	// A UDP "connection" sends no packet: it only asks the OS which local address the default route uses.
+	if c, err := net.Dial("udp4", "192.0.2.1:9"); err == nil {
+		if a, ok := c.LocalAddr().(*net.UDPAddr); ok {
+			add(a.IP)
+		}
+		_ = c.Close()
+	}
+	ifaces, _ := net.Interfaces()
+	for _, ifc := range ifaces {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok {
+				add(ipnet.IP)
+			}
+		}
+	}
+	out := make([]string, len(ips))
+	for i, ip := range ips {
+		out[i] = fmt.Sprintf("%s:%d", ip, remotePort)
+	}
+	return out
+}
+
+// pairingURI is the text of the QR code in Settings → Phone: the app reads the addresses (one addr parameter
+// each, best guess first) and the token from it.
+func pairingURI(addrs []string, token string) string {
+	return "lollipop://pair?" + url.Values{"addr": addrs, "token": {token}}.Encode()
+}
+
+// pairingQR renders pairingURI as an SVG data URL for the settings window, or "" while a part is missing.
+func pairingQR(addrs []string, token string) string {
+	if len(addrs) == 0 || token == "" {
+		return ""
+	}
+	code, err := qr.Encode(pairingURI(addrs, token), qr.M)
 	if err != nil {
 		return ""
 	}
-	for _, a := range addrs {
-		ipnet, ok := a.(*net.IPNet)
-		if !ok || ipnet.IP.IsLoopback() {
-			continue
-		}
-		ip := ipnet.IP.To4()
-		if ip != nil && ip.IsPrivate() {
-			return fmt.Sprintf("%s:%d", ip.String(), remotePort)
+	const quiet = 4 // white border, in modules, that scanners need around the code
+	n := code.Size + 2*quiet
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" shape-rendering="crispEdges">`+
+		`<rect width="%d" height="%d" fill="#fff"/><path fill="#000" d="`, n, n, n, n)
+	for y := 0; y < code.Size; y++ {
+		for x := 0; x < code.Size; x++ {
+			if code.Black(x, y) {
+				fmt.Fprintf(&b, "M%d %dh1v1h-1z", x+quiet, y+quiet)
+			}
 		}
 	}
-	return ""
+	b.WriteString(`"/></svg>`)
+	return "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(b.String()))
 }

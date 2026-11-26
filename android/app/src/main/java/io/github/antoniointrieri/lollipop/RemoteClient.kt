@@ -1,6 +1,7 @@
 package io.github.antoniointrieri.lollipop
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -49,7 +50,7 @@ object RemoteClient {
     @Volatile private var token: String = ""
 
     @Volatile private var running = false
-    private var thread: Thread? = null
+    @Volatile private var thread: Thread? = null
     @Volatile private var connection: HttpURLConnection? = null
 
     fun addListener(l: Listener) {
@@ -78,6 +79,28 @@ object RemoteClient {
 
     fun isConfigured(ctx: Context): Boolean = endpoint(ctx).isNotBlank() && token(ctx).isNotBlank()
 
+    // The QR code in lollipop's Settings → Phone carries lollipop://pair?addr=host:port&addr=...&token=T,
+    // one addr per private address of the PC, best guess first. Returns (endpoints, token), or null for any
+    // other code.
+    fun parsePairing(raw: String?): Pair<List<String>, String>? {
+        val uri = Uri.parse(raw ?: return null)
+        if (uri.scheme != "lollipop" || uri.host != "pair") return null
+        val addrs = uri.getQueryParameters("addr").map { it.trim() }.filter { it.isNotEmpty() }
+        val tok = uri.getQueryParameter("token")?.trim().orEmpty()
+        return if (addrs.isEmpty() || tok.isEmpty()) null else addrs to tok
+    }
+
+    // True if lollipop answers at endpoint (host:port) and accepts the token. Blocking: call it off the main thread.
+    fun reachable(endpoint: String, tokenValue: String): Boolean = try {
+        val enc = URLEncoder.encode(tokenValue, "UTF-8")
+        val c = URL("http://$endpoint/state?token=$enc").openConnection() as HttpURLConnection
+        c.connectTimeout = 1500
+        c.readTimeout = 1500
+        try { c.responseCode == HttpURLConnection.HTTP_OK } finally { c.disconnect() }
+    } catch (e: Exception) {
+        false
+    }
+
     private fun loadConfig(ctx: Context) {
         val ep = endpoint(ctx)
         val colon = ep.lastIndexOf(':')
@@ -103,7 +126,10 @@ object RemoteClient {
         }
         if (running) return
         running = true
-        thread = Thread({ loop() }, "lollipop-sse").apply { isDaemon = true; start() }
+        // Assigned before start(): the loop checks it is still the current thread.
+        val t = Thread({ loop() }, "lollipop-sse").apply { isDaemon = true }
+        thread = t
+        t.start()
     }
 
     @Synchronized
@@ -118,13 +144,17 @@ object RemoteClient {
         listeners.forEach { it.onAgents(agents) }
     }
 
+    // True while this thread is the live connection. A stop() followed at once by start() (a new pairing
+    // while connected) leaves the old thread finishing its read; it must not reconnect or touch the state.
+    private fun current() = running && thread === Thread.currentThread()
+
     private fun loop() {
         var backoff = 1000L
-        while (running) {
+        while (current()) {
             try {
                 setStatus(Status.CONNECTING)
                 val conn = open("/events")
-                connection = conn
+                if (thread === Thread.currentThread()) connection = conn
                 val code = conn.responseCode
                 when (code) {
                     HttpURLConnection.HTTP_OK -> {
@@ -143,15 +173,15 @@ object RemoteClient {
                 }
                 conn.disconnect()
             } catch (e: Exception) {
-                if (running) {
+                if (current()) {
                     lastError = e.message ?: e.javaClass.simpleName
                     setStatus(Status.ERROR)
                     Log.w(TAG, "connection error: ${e.message}")
                 }
             } finally {
-                connection = null
+                if (thread === Thread.currentThread()) connection = null
             }
-            if (!running) break
+            if (!current()) break
             setStatus(Status.CONNECTING)
             try {
                 Thread.sleep(backoff)
@@ -160,7 +190,7 @@ object RemoteClient {
             }
             backoff = (backoff * 2).coerceAtMost(30_000L)
         }
-        setStatus(Status.DISCONNECTED)
+        if (current()) setStatus(Status.DISCONNECTED)
     }
 
     // Parse the SSE stream: `event: state` + `data: <json>`, dispatched on a blank line. Lines starting
@@ -170,7 +200,7 @@ object RemoteClient {
         val reader = BufferedReader(InputStreamReader(conn.inputStream, Charsets.UTF_8))
         var event: String? = null
         val data = StringBuilder()
-        while (running) {
+        while (current()) {
             val line = reader.readLine() ?: break
             when {
                 line.isEmpty() -> {

@@ -19,6 +19,9 @@ The app talks to lollipop over HTTP on the local network; the agent state never 
   Android 16). Developed and tested on a Pixel 10a with Android 17.
 - lollipop running on a PC on the **same Wi-Fi network**, with the phone server enabled (see
   [Phone](../README.md#phone) in the main README).
+- **Google Play services**, for the QR code scan (the
+  [Google code scanner](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner)). Without it,
+  pairing by hand still works.
 - To build: **JDK 17+** and the **Android SDK** (platform 37, build-tools 37.0.0). The Gradle wrapper pulls Gradle
   itself. No Android Studio required.
 
@@ -39,7 +42,8 @@ With the phone connected over USB or wireless adb:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-On first launch, grant the notification permission from the app. For the screen to wake over the lock screen on a
+On first launch, grant the notification permission from the app. The app asks for the local network permission
+(Android 17) when it first connects: without it, connections to the PC time out. For the screen to wake over the lock screen on a
 waiting agent, also allow full-screen notifications in Settings → Apps → Special app access → Notifications that
 turn on the screen (or `adb shell appops set io.github.antoniointrieri.lollipop USE_FULL_SCREEN_INTENT allow`).
 
@@ -47,8 +51,15 @@ turn on the screen (or `adb shell appops set io.github.antoniointrieri.lollipop 
 
 1. In lollipop on the PC, enable **Settings → Phone → Show agents on your phone**, and open the firewall port once
    (see the main README).
-2. In the app, enter the **address** (`192.168.x.y:47600`, as shown by lollipop) and the **token**, then tap
-   **Connetti**. The status line shows the connection state and the number of agents.
+2. In the app, tap **Scansiona QR** and frame the QR code shown by lollipop. The app fills in the address and the
+   token and connects; the status line shows the connection state and the number of agents. Alternatively, enter
+   the **address** (`192.168.x.y:47600`) and the **token** by hand and tap **Connetti**.
+
+The QR code carries `lollipop://pair?addr=192.168.x.y:47600&addr=…&token=…`, with one `addr` for each private
+address of the PC (Wi-Fi or Ethernet, but also WSL, Hyper-V or VPN adapters), the one of the default route first.
+The app tries `GET /state` on each and keeps the first that answers. The scanner is the Google code scanner from
+Play services: it shows its own camera screen and returns only the decoded text, so the app does not ask for the
+camera permission. Scanning a new code while connected reconnects with the new pairing.
 
 The app keeps a background connection (a foreground service) so it can update the Live Update and wake the screen
 while the phone is idle.
@@ -62,7 +73,7 @@ while the phone is idle.
   and posts a full-screen alert (which turns on the screen and shows the grid) when an agent transitions to
   waiting.
 - `GridActivity`: the lock-screen grid.
-- `MainActivity`: pairing and connection status.
+- `MainActivity`: pairing (QR scan or manual) and connection status.
 
 See the [HTTP contract](../remote.go) served by lollipop: `GET /state`, `GET /events` (SSE), `POST /focus`, all
 authenticated with a `?token=` query parameter.
@@ -73,4 +84,3 @@ authenticated with a `?token=` query parameter.
   Exempting the app from battery optimization makes it more reliable.
 - Bringing the PC window to the front depends on lollipop and on Windows' foreground rules; a focus triggered over
   the network may only flash the taskbar entry.
-- Pairing is manual (address + token); there is no QR scan yet.

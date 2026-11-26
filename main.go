@@ -204,6 +204,7 @@ func main() {
 				if set.RemoteToken == "" {
 					u.change(func(s *settings) { s.RemoteToken = newToken() })
 					set = u.get()
+					u.emitStatus() // the pairing QR code needs the token
 				}
 				remote.setToken(set.RemoteToken)
 				remote.ensureStarted()

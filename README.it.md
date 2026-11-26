@@ -168,7 +168,7 @@ Update di Android (la notifica che Maps usa per la navigazione), sulla schermata
 Telefono e PC devono stare sulla stessa rete Wi-Fi. Attivazione:
 
 1. **Impostazioni → Telefono → Mostra gli agenti sul telefono**: lollipop apre un server locale sulla porta 47600
-   e mostra l'indirizzo (`192.168.x.y:47600`) e un token.
+   e mostra un QR code, l'indirizzo (`192.168.x.y:47600`) e un token.
 2. Apri la porta nel firewall, una volta sola, da un terminale come amministratore:
 
    ```
@@ -176,7 +176,8 @@ Telefono e PC devono stare sulla stessa rete Wi-Fi. Attivazione:
    ```
 
    `remoteip=LocalSubnet` accetta solo connessioni dalla rete locale; il token autentica la connessione.
-3. Nell'app Android, inserisci indirizzo e token e tocca Connetti.
+3. Nell'app Android, tocca **Scansiona QR** e inquadra il QR code: l'app legge indirizzo e token e si connette.
+   In alternativa li inserisci a mano e tocchi **Connetti**.
 
 Il telefono parla con lollipop via HTTP sulla LAN, quindi lo stato degli agenti non esce dalla rete locale.
 L'app sta in [`android/`](android/); vedi il suo README per compilazione e installazione.

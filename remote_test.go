@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -80,4 +82,22 @@ func TestRemoteEventsStream(t *testing.T) {
 		}
 	}
 	t.Fatal("no data event received")
+}
+
+func TestPairingQR(t *testing.T) {
+	addrs := []string{"192.168.1.5:47600", "172.18.48.1:47600"}
+	u, err := url.Parse(pairingURI(addrs, "abc123"))
+	if err != nil || u.Scheme != "lollipop" || u.Host != "pair" ||
+		strings.Join(u.Query()["addr"], ",") != strings.Join(addrs, ",") || u.Query().Get("token") != "abc123" {
+		t.Fatalf("pairingURI = %v (%v)", u, err)
+	}
+	if pairingQR(nil, "abc123") != "" || pairingQR(addrs, "") != "" {
+		t.Fatal("pairingQR without address or token should be empty")
+	}
+	const prefix = "data:image/svg+xml;base64,"
+	got := pairingQR(addrs, newToken())
+	svg, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(got, prefix))
+	if !strings.HasPrefix(got, prefix) || err != nil || !strings.HasPrefix(string(svg), "<svg") || !strings.Contains(string(svg), "h1v1h-1z") {
+		t.Fatalf("pairingQR = %.80q (%v)", got, err)
+	}
 }

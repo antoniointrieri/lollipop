@@ -558,15 +558,18 @@ func (st hooksStatus) code() string {
 	return "absent"
 }
 
-// emitStatus sends the settings window what lives outside settings.json: Claude Code hook, login entry, version.
+// emitStatus sends the settings window what lives outside settings.json: Claude Code hook, login entry, version,
+// phone pairing QR code.
 func (u *ui) emitStatus() {
 	on, _ := autostartState()
 	light, dark := accentColors()
 	u.mu.Lock()
-	up := u.update
+	up, token := u.update, u.s.RemoteToken
 	u.mu.Unlock()
+	addrs := lanAddresses()
 	u.app.Event.Emit("status", map[string]any{"update": up[0], "updateURL": up[1], "claude": claudeHooksStatus().code(), "claudeSettings": claudeSettingsPath(),
-		"autostart": on, "version": appVersion(), "translucent": translucentBackdrop(), "accent": []string{light, dark}, "remoteAddr": lanAddress()})
+		"autostart": on, "version": appVersion(), "translucent": translucentBackdrop(), "accent": []string{light, dark},
+		"remoteAddrs": addrs, "remoteQR": pairingQR(addrs, token)})
 }
 
 // appVersion is the tag of a release build (v0.4.0), else the version stamped by go build (a pseudo-version).

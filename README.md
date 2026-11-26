@@ -168,8 +168,8 @@ notification Maps uses for navigation), on the lock screen and on the always-on 
 
 Phone and PC must be on the same Wi-Fi network. To enable it:
 
-1. **Settings → Phone → Show agents on your phone**: lollipop opens a local server on port 47600 and shows the
-   address (`192.168.x.y:47600`) and a token.
+1. **Settings → Phone → Show agents on your phone**: lollipop opens a local server on port 47600 and shows a QR
+   code, the address (`192.168.x.y:47600`) and a token.
 2. Open the port in the firewall, once, from a terminal running as administrator:
 
    ```
@@ -177,7 +177,8 @@ Phone and PC must be on the same Wi-Fi network. To enable it:
    ```
 
    `remoteip=LocalSubnet` accepts connections from the local network only; the token authenticates the connection.
-3. In the Android app, enter the address and token and tap Connect.
+3. In the Android app, tap **Scansiona QR** and frame the QR code: the app reads address and token and connects.
+   Entering them by hand and tapping **Connetti** works too.
 
 The phone talks to lollipop over HTTP on the LAN, so the agent state never leaves the local network. The app lives
 in [`android/`](android/); see its README for how to build and install it.
